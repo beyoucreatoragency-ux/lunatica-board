@@ -9,6 +9,8 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script>emailjs.init('qUHJjukBXVQMjvB4U-');</script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'DM Sans',sans-serif;background:#FAF7F5;overflow-x:hidden;}
@@ -26,7 +28,17 @@
     async function dbGet(k){ try{ const {data}=await _sb.from('kv_store').select('value').eq('key',k).maybeSingle(); return data?.value||null; }catch{ return null; } }
     async function dbSet(k,v){ try{ await _sb.from('kv_store').upsert({key:k,value:v,updated_at:new Date().toISOString()},{onConflict:'key'}); }catch(e){ console.error(e); } }
 
-    const NAVY='#06153F', PINK='#EDD1C8', CREAM='#FAF7F5';
+    async function sendEmailNotif(toUser, fromUser, itemName, preview){
+      try{
+        await emailjs.send('service_9yhnyv9','template_dr8nols',{
+          to_email: toUser.email,
+          to_name:  toUser.name,
+          from_name: fromUser.name,
+          item_name: itemName,
+          preview:   preview,
+        });
+      }catch(e){ console.warn('Email non inviata:',e); }
+    }, PINK='#EDD1C8', CREAM='#FAF7F5';
     const USERS={
       francesca:{ id:'francesca', name:'Francesca', email:'francesca.concaro@gmail.com', initials:'FC', color:NAVY },
       ludovica: { id:'ludovica',  name:'Ludovica',  email:'marketing.ludovicapinna@gmail.com', initials:'LP', color:'#7E5A9B' },
@@ -447,6 +459,9 @@
           const preview=text.length>70?text.slice(0,70)+'…':text;
           mentions.filter(m=>m!==user.id).forEach(mid=>{
             nn[mid]=[...(nn[mid]||[]),{id:uid(),type:'mention',commentId:nc.id,itemId,fromUserId:user.id,preview,read:false,createdAt:new Date().toISOString()}];
+            // Invia email
+            const targetItem=Object.values(items).flat().find(i=>i.id===itemId);
+            sendEmailNotif(USERS[mid], user, targetItem?.name||'Lunatica Board', preview);
           });
           await saveNotifs(nn);
         }
