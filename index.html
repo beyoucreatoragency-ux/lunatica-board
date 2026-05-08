@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lunatica Board 🌙</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'DM Sans',sans-serif;background:#FAF7F5;}</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ── Supabase ──
+    const _sb = window.supabase.createClient(
+      'https://evermusintsnpjxbrymx.supabase.co',
+      'sb_publishable_LHCjPvtZmok42eJIOQNZyg_QHhFKuc7'
+    );
+    async function dbGet(k){
+      try{ const {data}=await _sb.from('kv_store').select('value').eq('key',k).maybeSingle(); return data?.value||null; }catch{ return null; }
+    }
+    async function dbSet(k,v){
+      try{ await _sb.from('kv_store').upsert({key:k,value:v,updated_at:new Date().toISOString()},{onConflict:'key'}); }catch(e){ console.error(e); }
+    }
+
+    // ── Costanti ──
+    const NAVY='#06153F', PINK='#EDD1C8', CREAM='#FAF7F5';
+    const USERS = {
+      francesca:{ id:'francesca', name:'Francesca', email:'francesca.concaro@gmail.com', initials:'FC', color:NAVY },
+      ludovica: { id:'ludovica',  name:'Ludovica',  email:'marketing.ludovicapinna@gmail.com', initials:'LP', color:'#7E5A9B' },
+      isa:      { id:'isa',       name:'Isa',        email:'isa_lp97@hotmail.it', initials:'IS', color:'#C4826A' },
+      elisa:    { id:'elisa',     name:'Elisa',      email:'elisasinieri@gmail.com', initials:'ES', color:'#2D9E75' },
+    };
+    const CREDENTIALS = {
+      'francesca.concaro@gmail.com':       { id:'francesca', pass:'cfp2025' },
+      'marketing.ludovicapinna@gmail.com': { id:'ludovica',  pass:'cfp2025' },
+      'isa_lp97@hotmail.it':               { id:'isa',       pass:'cfp2025' },
+      'elisasinieri@gmail.com':            { id:'elisa',     pass:'cfp2025' },
+    };
+    const DEFAULT_SECTION = { id:'lanci', name:'Lanci', emoji:'🚀', isDefault:true };
+    const TASK_STATUSES=['todo','in-progress','done'];
+    const STATUS_LABEL={ todo:'Da fare','in-progress':'In corso',done:'Fatto ✓' };
+    const STATUS_STYLE={ todo:{bg:'#f1f3f5',color:'#868e96'},'in-progress':{bg:'#fff3bf',color:'#e67700'},done:{bg:'#d3f9d8',color:'#2f9e44'} };
+    const L_STATUSES=['pianificato','in corso','completato'];
+    const L_STYLE={ pianificato:{bg:PINK,color:NAVY},'in corso':{bg:NAVY,color:'#fff'},completato:{bg:'#d3f9d8',color:'#2f9e44'} };
+
+    function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+    function fmtDate(d){ return d?new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'}):''; }
+    function fmtTime(d){ return d?new Date(d).toLocaleString('it-IT',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):''; }
+    function isOverdue(d){ return d&&new Date(d)<new Date()&&new Date(d).toDateString()!==new Date().toDateString(); }
+
+    // ── Avatar ──
+    function Av({uid:id,size=28}){
+      const u=USERS[id]; if(!u) return null;
+      return <div title={u.name} style={{width:size,height:size,borderRadius:'50%',background:u.color,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*.35,fontWeight:700,flexShrink:0,fontFamily:'DM Sans,sans-serif'}}>{u.initials}</div>;
+    }
+
+    // ── Button ──
+    function Btn({children,onClick,v='primary',style:ex={},disabled}){
+      const s={primary:{background:NAVY,color:'#fff',border:'none'},secondary:{background:'#fff',color:NAVY,border:`1.5px solid ${NAVY}`},danger:{background:'#fff',color:'#c92a2a',border:'1.5px solid #c92a2a'}};
+      return <button onClick={onClick} disabled={disabled} style={{padding:'9px 20px',borderRadius:8,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:'DM Sans,sans-serif',...s[v],opacity:disabled?.5:1,...ex}}>{children}</button>;
+    }
+
+    const IS={width:'100%',padding:'9px 12px',border:`1.5px solid ${PINK}`,borderRadius:8,fontSize:14,fontFamily:'DM Sans,sans-serif',outline:'none',boxSizing:'border-box',background:CREAM,color:NAVY};
+    const LS={display:'block',fontSize:12,fontWeight:600,color:NAVY,marginBottom:5,letterSpacing:'0.05em',textTransform:'uppercase'};
+
+    // ── Modal ──
+    function Modal({title,onClose,children,wide=false}){
+      return <div style={{position:'fixed',inset:0,background:'rgba(6,21,63,0.55)',display:'flex',alignItems:'flex-start',justifyContent:'center',zIndex:1000,padding:'80px 20px 40px',overflowY:'auto'}}>
+        <div style={{background:'#fff',borderRadius:16,padding:'32px',width:wide?640:480,maxWidth:'100%',border:`1px solid ${PINK}`,flexShrink:0}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:24}}>
+            <h3 style={{margin:0,fontFamily:'DM Serif Display,serif',fontSize:20,color:NAVY}}>{title}</h3>
+            <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:22,color:'#aaa',padding:4,lineHeight:1}}>×</button>
+          </div>
+          {children}
+        </div>
+      </div>;
+    }
+
+    // ── File Fields ──
+    function FileFields({files,setFiles}){
+      return <div>
+        <label style={LS}>Link file (Drive, Notion…)</label>
+        {files.map((f,i)=><div key={i} style={{display:'flex',gap:8,marginBottom:8}}>
+          <input style={{...IS,flex:'0 0 110px'}} value={f.name} onChange={e=>setFiles(files.map((x,j)=>j===i?{...x,name:e.target.value}:x))} placeholder="Nome"/>
+          <input style={{...IS,flex:1}} value={f.url} onChange={e=>setFiles(files.map((x,j)=>j===i?{...x,url:e.target.value}:x))} placeholder="https://…"/>
+          {files.length>1&&<button onClick={()=>setFiles(files.filter((_,j)=>j!==i))} style={{background:'none',border:'none',cursor:'pointer',color:'#c92a2a',fontSize:18,lineHeight:1}}>×</button>}
+        </div>)}
+        <button onClick={()=>setFiles([...files,{name:'',url:''}])} style={{background:'none',border:`1px dashed ${PINK}`,padding:'5px 14px',borderRadius:6,cursor:'pointer',fontSize:12,color:'#999',fontFamily:'DM Sans,sans-serif'}}>+ Aggiungi file</button>
+      </div>;
+    }
+
+    // ── Add Item Modal ──
+    function AddItemModal({onClose,onSave,sectionName}){
+      const [name,setName]=useState('');const [date,setDate]=useState('');const [desc,setDesc]=useState('');const [files,setFiles]=useState([{name:'',url:''}]);
+      return <Modal title={`Nuovo in "${sectionName}"`} onClose={onClose} wide>
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div><label style={LS}>Nome *</label><input style={IS} value={name} onChange={e=>setName(e.target.value)} placeholder="es. Lancio Slim Legs Challenge" autoFocus/></div>
+          <div><label style={LS}>Data *</label><input style={IS} type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+          <div><label style={LS}>Descrizione</label><textarea style={{...IS,minHeight:80,resize:'vertical'}} value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Descrivi…"/></div>
+          <FileFields files={files} setFiles={setFiles}/>
+          <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}>
+            <Btn v="secondary" onClick={onClose}>Annulla</Btn>
+            <Btn disabled={!name||!date} onClick={()=>onSave({name,date,description:desc,files:files.filter(f=>f.url)})}>Salva</Btn>
+          </div>
+        </div>
+      </Modal>;
+    }
+
+    // ── Add Task Modal ──
+    function AddTaskModal({onClose,onSave,defaultAssignee}){
+      const [title,setTitle]=useState('');const [desc,setDesc]=useState('');const [assignedTo,setAssignedTo]=useState(defaultAssignee||'francesca');const [dueDate,setDueDate]=useState('');const [files,setFiles]=useState([{name:'',url:''}]);
+      return <Modal title="Nuova Task" onClose={onClose} wide>
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div><label style={LS}>Titolo *</label><input style={IS} value={title} onChange={e=>setTitle(e.target.value)} placeholder="es. Prepara copy email" autoFocus/></div>
+          <div><label style={LS}>Descrizione</label><textarea style={{...IS,minHeight:60,resize:'vertical'}} value={desc} onChange={e=>setDesc(e.target.value)}/></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+            <div><label style={LS}>Assegna a</label><select style={IS} value={assignedTo} onChange={e=>setAssignedTo(e.target.value)}>{Object.values(USERS).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+            <div><label style={LS}>Scadenza</label><input style={IS} type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></div>
+          </div>
+          <FileFields files={files} setFiles={setFiles}/>
+          <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}>
+            <Btn v="secondary" onClick={onClose}>Annulla</Btn>
+            <Btn disabled={!title} onClick={()=>onSave({title,description:desc,assignedTo,dueDate,files:files.filter(f=>f.url)})}>Aggiungi Task</Btn>
+          </div>
+        </div>
+      </Modal>;
+    }
+
+    // ── Login Screen ──
+    function LoginScreen({onLogin}){
+      const [email,setEmail]=useState('');const [pass,setPass]=useState('');const [err,setErr]=useState('');
+      const login=()=>{ const c=CREDENTIALS[email.trim()]; if(c&&c.pass===pass) onLogin(USERS[c.id]); else setErr('Email o password errati'); };
+      return <div style={{minHeight:'100vh',background:CREAM,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div style={{background:'#fff',borderRadius:20,padding:'48px 40px',width:400,border:`1.5px solid ${PINK}`}}>
+          <div style={{textAlign:'center',marginBottom:36}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,marginBottom:6}}>
+              <svg width="20" height="26" viewBox="0 0 20 26" fill="none"><path d="M10 1C4 1 1 6 1 13C1 20 4 25 10 25C7.5 22 6 18 6 13C6 8 7.5 4 10 1Z" fill={PINK}/></svg>
+              <span style={{fontFamily:'DM Serif Display,serif',fontSize:26,color:NAVY}}>Lunatica Board</span>
+            </div>
+            <p style={{color:'#bbb',fontSize:13,margin:0}}>Solo per il team CFP</p>
+          </div>
+          <div style={{marginBottom:14}}><label style={LS}>Email</label><input style={IS} type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&login()} placeholder="la-tua@email.com"/></div>
+          <div style={{marginBottom:24}}><label style={LS}>Password</label><input style={IS} type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==='Enter'&&login()} placeholder="••••••••"/></div>
+          {err&&<p style={{color:'#c92a2a',fontSize:13,textAlign:'center',marginBottom:16}}>{err}</p>}
+          <button onClick={login} style={{width:'100%',padding:13,background:NAVY,color:'#fff',border:'none',borderRadius:10,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>Accedi</button>
+          <div style={{marginTop:20,padding:14,background:CREAM,borderRadius:10,fontSize:11,color:'#aaa',lineHeight:1.9}}>
+            <strong style={{color:NAVY,display:'block',marginBottom:2}}>Password iniziale: cfp2025</strong>
+            francesca.concaro@gmail.com · marketing.ludovicapinna@gmail.com · isa_lp97@hotmail.it · elisasinieri@gmail.com
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ── Task Card ──
+    function TaskCard({task,currentUser,onStatusChange,onDelete}){
+      const canDel=task.createdBy===currentUser.id||task.assignedTo===currentUser.id;
+      const s=STATUS_STYLE[task.status]||STATUS_STYLE.todo;
+      const next=TASK_STATUSES[(TASK_STATUSES.indexOf(task.status)+1)%TASK_STATUSES.length];
+      const overdue=task.status!=='done'&&isOverdue(task.dueDate);
+      return <div style={{background:'#fff',border:`1px solid ${overdue?'#ff8787':'#eee'}`,borderRadius:10,padding:'12px 14px',marginBottom:8}}>
+        <div style={{display:'flex',justifyContent:'space-between',gap:6,marginBottom:6}}>
+          <p style={{margin:0,fontSize:13,fontWeight:600,color:NAVY,lineHeight:1.4,flex:1}}>{task.title}</p>
+          {canDel&&<button onClick={()=>onDelete(task.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:16,padding:0,flexShrink:0,lineHeight:1}} onMouseOver={e=>e.target.style.color='#c92a2a'} onMouseOut={e=>e.target.style.color='#ddd'}>×</button>}
+        </div>
+        {task.description&&<p style={{margin:'0 0 6px',fontSize:12,color:'#999',lineHeight:1.4}}>{task.description}</p>}
+        {task.dueDate&&<p style={{margin:'0 0 6px',fontSize:11,color:overdue?'#c92a2a':'#aaa',fontWeight:overdue?700:400}}>📅 {fmtDate(task.dueDate)}{overdue?' ⚠️ scaduta':''}</p>}
+        {task.files&&task.files.filter(f=>f.url).length>0&&<div style={{marginBottom:6,display:'flex',gap:5,flexWrap:'wrap'}}>
+          {task.files.filter(f=>f.url).map((f,i)=><a key={i} href={f.url} target="_blank" rel="noreferrer" style={{fontSize:11,padding:'2px 8px',background:CREAM,border:`1px solid ${PINK}`,borderRadius:12,color:NAVY,textDecoration:'none'}}>📎 {f.name||'File'}</a>)}
+        </div>}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:4}}>
+          <span style={{fontSize:10,color:'#ddd'}}>{fmtDate(task.createdAt)}</span>
+          <button onClick={()=>onStatusChange(task.id,next)} style={{fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:20,border:'none',cursor:'pointer',background:s.bg,color:s.color,fontFamily:'DM Sans,sans-serif'}}>{STATUS_LABEL[task.status]}</button>
+        </div>
+      </div>;
+    }
+
+    // ── Items Page ──
+    function ItemsPage({section,items,tasks,onAdd,onDelete,onStatusChange,onSelect}){
+      const [showModal,setShowModal]=useState(false);const [confirmDel,setConfirmDel]=useState(null);
+      const sorted=[...items].sort((a,b)=>new Date(a.date)-new Date(b.date));
+      return <div style={{padding:'36px 40px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:32}}>
+          <div>
+            <h1 style={{fontFamily:'DM Serif Display,serif',fontSize:34,color:NAVY,margin:'0 0 6px'}}>{section.emoji} {section.name}</h1>
+            <p style={{color:'#bbb',margin:0,fontSize:14}}>{items.length} elementi</p>
+          </div>
+          <Btn onClick={()=>setShowModal(true)} style={{marginTop:6}}>+ Nuovo elemento</Btn>
+        </div>
+        {sorted.length===0
+          ?<div style={{textAlign:'center',padding:'100px 0',color:'#ccc'}}><div style={{fontSize:48,marginBottom:16}}>{section.emoji}</div><p>Nessun elemento ancora.</p></div>
+          :<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(275px,1fr))',gap:20}}>
+            {sorted.map(item=>{
+              const lt=tasks[item.id]||[];const done=lt.filter(t=>t.status==='done').length;
+              const prog=lt.length>0?Math.round(done/lt.length*100):0;
+              const ls=L_STYLE[item.status]||L_STYLE.pianificato;
+              return <div key={item.id} onClick={()=>onSelect(item)} style={{background:'#fff',borderRadius:16,border:`1px solid ${PINK}`,overflow:'hidden',cursor:'pointer'}}>
+                <div style={{height:5,background:item.status==='completato'?'#74c0fc':item.status==='in corso'?NAVY:PINK}}/>
+                <div style={{padding:'20px 20px 16px'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:10}}>
+                    <h3 style={{fontFamily:'DM Serif Display,serif',fontSize:18,color:NAVY,margin:0,flex:1}}>{item.name}</h3>
+                    <span style={{fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:20,whiteSpace:'nowrap',...ls}}>{item.status}</span>
+                  </div>
+                  <p style={{fontSize:13,color:'#aaa',margin:'0 0 10px'}}>📅 {fmtDate(item.date)}</p>
+                  {item.description&&<p style={{fontSize:13,color:'#666',margin:'0 0 12px',lineHeight:1.5,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{item.description}</p>}
+                  {lt.length>0&&<div style={{marginBottom:10}}>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'#ccc',marginBottom:4}}><span>Task</span><span>{done}/{lt.length}</span></div>
+                    <div style={{height:4,background:'#f1f3f5',borderRadius:2}}><div style={{height:'100%',width:`${prog}%`,background:NAVY,borderRadius:2}}/></div>
+                  </div>}
+                  {item.files&&item.files.filter(f=>f.url).length>0&&<p style={{fontSize:11,color:'#bbb',margin:'0 0 10px'}}>📎 {item.files.filter(f=>f.url).length} file</p>}
+                  <div style={{display:'flex',gap:8,justifyContent:'flex-end'}} onClick={e=>e.stopPropagation()}>
+                    <select value={item.status} onChange={e=>onStatusChange(item.id,e.target.value)} style={{fontSize:11,padding:'4px 8px',border:`1px solid ${PINK}`,borderRadius:6,background:CREAM,color:NAVY,cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>
+                      {L_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <button onClick={()=>setConfirmDel(item)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:16,padding:'2px 4px'}} onMouseOver={e=>e.target.style.color='#c92a2a'} onMouseOut={e=>e.target.style.color='#ddd'}>🗑</button>
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>
+        }
+        {showModal&&<AddItemModal onClose={()=>setShowModal(false)} sectionName={section.name} onSave={d=>{onAdd(d);setShowModal(false);}}/>}
+        {confirmDel&&<Modal title="Elimina elemento" onClose={()=>setConfirmDel(null)}>
+          <p style={{color:'#666',marginBottom:24}}>Sicura di voler eliminare <strong>"{confirmDel.name}"</strong>? Verranno eliminate anche tutte le task e i commenti.</p>
+          <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+            <Btn v="secondary" onClick={()=>setConfirmDel(null)}>Annulla</Btn>
+            <Btn v="danger" onClick={()=>{onDelete(confirmDel.id);setConfirmDel(null);}}>Elimina</Btn>
+          </div>
+        </Modal>}
+      </div>;
+    }
+
+    // ── Item Detail Page ──
+    function ItemDetailPage({item,tasks,comments,currentUser,sectionName,onBack,onAddTask,onUpdateTaskStatus,onDeleteTask,onAddComment,onDeleteComment}){
+      const [showAddTask,setShowAddTask]=useState(null);
+      const [commentText,setCommentText]=useState('');
+      const handleComment=()=>{ if(!commentText.trim()) return; onAddComment(commentText); setCommentText(''); };
+      const renderComment=text=>text.split(/(@\w+)/g).map((p,i)=>{
+        const u=Object.values(USERS).find(u=>p==='@'+u.name);
+        return u?<strong key={i} style={{color:NAVY,background:PINK,padding:'1px 5px',borderRadius:3}}>{p}</strong>:p;
+      });
+      return <div style={{padding:'32px 40px'}}>
+        <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'#aaa',fontSize:13,padding:0,marginBottom:24,fontFamily:'DM Sans,sans-serif'}}>← Torna a {sectionName}</button>
+        <div style={{background:'#fff',borderRadius:16,border:`1px solid ${PINK}`,padding:'24px 28px',marginBottom:32}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+            <div style={{flex:1}}>
+              <h1 style={{fontFamily:'DM Serif Display,serif',fontSize:28,color:NAVY,margin:'0 0 8px'}}>{item.name}</h1>
+              <p style={{color:'#aaa',margin:'0 0 8px',fontSize:14}}>📅 {fmtDate(item.date)}</p>
+              {item.description&&<p style={{color:'#555',margin:0,fontSize:14,lineHeight:1.6}}>{item.description}</p>}
+            </div>
+            <span style={{fontSize:12,fontWeight:700,padding:'5px 14px',borderRadius:20,...(L_STYLE[item.status]||L_STYLE.pianificato)}}>{item.status}</span>
+          </div>
+          {item.files&&item.files.filter(f=>f.url).length>0&&<div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${PINK}`,display:'flex',gap:10,flexWrap:'wrap'}}>
+            {item.files.filter(f=>f.url).map((f,i)=><a key={i} href={f.url} target="_blank" rel="noreferrer" style={{display:'inline-flex',alignItems:'center',gap:6,padding:'5px 14px',background:CREAM,border:`1px solid ${PINK}`,borderRadius:20,fontSize:12,color:NAVY,textDecoration:'none',fontFamily:'DM Sans,sans-serif'}}>📎 {f.name||'File'}</a>)}
+          </div>}
+        </div>
+        <h2 style={{fontFamily:'DM Serif Display,serif',fontSize:22,color:NAVY,margin:'0 0 18px'}}>Task</h2>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16,marginBottom:40}}>
+          {Object.values(USERS).map(u=>{
+            const ut=tasks.filter(t=>t.assignedTo===u.id);
+            const done=ut.filter(t=>t.status==='done').length;
+            const hasOverdue=ut.some(t=>t.status!=='done'&&isOverdue(t.dueDate));
+            return <div key={u.id} style={{background:'#fff',borderRadius:14,border:`1px solid ${hasOverdue?'#ff8787':PINK}`,overflow:'hidden'}}>
+              <div style={{padding:'12px 14px',background:CREAM,borderBottom:`1px solid ${PINK}`,display:'flex',alignItems:'center',gap:8}}>
+                <Av uid={u.id} size={26}/>
+                <div style={{flex:1}}><p style={{margin:0,fontWeight:700,fontSize:13,color:NAVY}}>{u.name}</p><p style={{margin:0,fontSize:11,color:'#bbb'}}>{done}/{ut.length}</p></div>
+                <button onClick={()=>setShowAddTask(u.id)} style={{background:NAVY,color:'#fff',border:'none',borderRadius:6,width:24,height:24,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+              </div>
+              <div style={{padding:'10px',minHeight:60}}>
+                {ut.length===0?<p style={{color:'#e0e0e0',fontSize:12,textAlign:'center',margin:'16px 0'}}>Nessuna task</p>
+                  :ut.map(t=><TaskCard key={t.id} task={t} currentUser={currentUser} onStatusChange={(id,s)=>onUpdateTaskStatus(id,s)} onDelete={id=>onDeleteTask(id)}/>)
+                }
+              </div>
+            </div>;
+          })}
+        </div>
+        <h2 style={{fontFamily:'DM Serif Display,serif',fontSize:22,color:NAVY,margin:'0 0 18px'}}>Commenti</h2>
+        <div style={{background:'#fff',borderRadius:14,border:`1px solid ${PINK}`,overflow:'hidden',marginBottom:40}}>
+          <div style={{padding:'16px 20px',borderBottom:`1px solid ${PINK}`}}>
+            <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+              <Av uid={currentUser.id} size={34}/>
+              <div style={{flex:1}}>
+                <textarea value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleComment();}}}
+                  placeholder="Scrivi un commento… (Invio per inviare)"
+                  style={{width:'100%',padding:'10px 12px',border:`1.5px solid ${PINK}`,borderRadius:10,fontSize:13,fontFamily:'DM Sans,sans-serif',outline:'none',resize:'none',minHeight:60,boxSizing:'border-box',background:CREAM,color:NAVY}}/>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8,flexWrap:'wrap',gap:8}}>
+                  <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+                    <span style={{fontSize:11,color:'#ccc'}}>@:</span>
+                    {Object.values(USERS).map(u=><button key={u.id} onClick={()=>setCommentText(p=>p+'@'+u.name+' ')} style={{fontSize:11,padding:'3px 10px',background:CREAM,border:`1px solid ${PINK}`,borderRadius:20,cursor:'pointer',color:NAVY,fontFamily:'DM Sans,sans-serif'}}>@{u.name}</button>)}
+                  </div>
+                  <Btn onClick={handleComment} disabled={!commentText.trim()} style={{padding:'7px 16px',fontSize:12}}>Invia</Btn>
+                </div>
+              </div>
+            </div>
+          </div>
+          {comments.length===0
+            ?<p style={{color:'#ccc',textAlign:'center',padding:'28px',margin:0,fontSize:13}}>Nessun commento ancora.</p>
+            :[...comments].reverse().map(c=>{
+                const author=USERS[c.authorId];
+                return <div key={c.id} style={{padding:'14px 20px',borderBottom:'1px solid #f8f9fa',display:'flex',gap:12}}>
+                  <Av uid={c.authorId} size={30}/>
+                  <div style={{flex:1}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                      <span style={{fontWeight:700,fontSize:13,color:NAVY}}>{author&&author.name}</span>
+                      <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                        <span style={{fontSize:11,color:'#ccc'}}>{fmtTime(c.createdAt)}</span>
+                        {c.authorId===currentUser.id&&<button onClick={()=>onDeleteComment(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:15,padding:0}} onMouseOver={e=>e.target.style.color='#c92a2a'} onMouseOut={e=>e.target.style.color='#ddd'}>×</button>}
+                      </div>
+                    </div>
+                    <p style={{margin:0,fontSize:13,color:'#444',lineHeight:1.5}}>{renderComment(c.text)}</p>
+                  </div>
+                </div>;
+              })
+          }
+        </div>
+        {showAddTask&&<AddTaskModal onClose={()=>setShowAddTask(null)} defaultAssignee={showAddTask} onSave={d=>{onAddTask(d);setShowAddTask(null);}}/>}
+      </div>;
+    }
+
+    // ── ROOT ──
+    function LunaticaBoard(){
+      const [user,setUser]=useState(null);
+      const [view,setView]=useState('items');
+      const [activeSectionId,setActiveSectionId]=useState('lanci');
+      const [activeItem,setActiveItem]=useState(null);
+      const [sections,setSections]=useState([DEFAULT_SECTION]);
+      const [items,setItems]=useState({});
+      const [tasks,setTasks]=useState({});
+      const [comments,setComments]=useState({});
+      const [notifs,setNotifs]=useState({});
+      const [showNotifs,setShowNotifs]=useState(false);
+      const [showAddSection,setShowAddSection]=useState(false);
+      const [newSectionName,setNewSectionName]=useState('');
+      const [loading,setLoading]=useState(true);
+
+      useEffect(()=>{ if(user) loadAll(); },[user]);
+
+      async function loadAll(){
+        setLoading(true);
+        const [s,it,t,c,n]=await Promise.all([dbGet('luna:sections'),dbGet('luna:items'),dbGet('luna:tasks'),dbGet('luna:comments'),dbGet('luna:notifs')]);
+        if(s&&s.length) setSections(s); if(it) setItems(it); if(t) setTasks(t); if(c) setComments(c); if(n) setNotifs(n);
+        setLoading(false);
+      }
+
+      const saveSections=async d=>{setSections(d);await dbSet('luna:sections',d);};
+      const saveItems   =async d=>{setItems(d);   await dbSet('luna:items',d);};
+      const saveTasks   =async d=>{setTasks(d);   await dbSet('luna:tasks',d);};
+      const saveComments=async d=>{setComments(d);await dbSet('luna:comments',d);};
+      const saveNotifs  =async d=>{setNotifs(d);  await dbSet('luna:notifs',d);};
+
+      const addSection=async()=>{
+        if(!newSectionName.trim()) return;
+        const EMOJIS=['📋','📧','🌙','💬','📱','🎯','✨','📊'];
+        const ns={id:uid(),name:newSectionName.trim(),emoji:EMOJIS[sections.length%EMOJIS.length],createdAt:new Date().toISOString()};
+        await saveSections([...sections,ns]); setNewSectionName(''); setShowAddSection(false); setActiveSectionId(ns.id);
+      };
+      const deleteSection=async id=>{
+        if(sections.find(s=>s.id===id)&&sections.find(s=>s.id===id).isDefault) return;
+        const ni={...items}; delete ni[id]; await saveItems(ni);
+        await saveSections(sections.filter(s=>s.id!==id));
+        if(activeSectionId===id){ setActiveSectionId('lanci'); setView('items'); setActiveItem(null); }
+      };
+      const addItem=async(secId,d)=>saveItems({...items,[secId]:[...(items[secId]||[]),{id:uid(),sectionId:secId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'pianificato'}]});
+      const deleteItem=async(secId,id)=>{
+        await saveItems({...items,[secId]:(items[secId]||[]).filter(i=>i.id!==id)});
+        const nt={...tasks}; delete nt[id]; await saveTasks(nt);
+        const nc={...comments}; delete nc[id]; await saveComments(nc);
+      };
+      const updateItemStatus=async(secId,id,s)=>saveItems({...items,[secId]:(items[secId]||[]).map(i=>i.id===id?{...i,status:s}:i)});
+      const addTask=async(itemId,d)=>saveTasks({...tasks,[itemId]:[...(tasks[itemId]||[]),{id:uid(),itemId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'todo'}]});
+      const updateTaskStatus=async(itemId,taskId,s)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).map(t=>t.id===taskId?{...t,status:s}:t)});
+      const deleteTask=async(itemId,taskId)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).filter(t=>t.id!==taskId)});
+      const addComment=async(itemId,text)=>{
+        const mentions=Object.values(USERS).filter(u=>text.includes('@'+u.name)).map(u=>u.id);
+        const nc={id:uid(),itemId,text,authorId:user.id,createdAt:new Date().toISOString(),mentions};
+        await saveComments({...comments,[itemId]:[...(comments[itemId]||[]),nc]});
+        if(mentions.length){
+          const nn={...notifs};
+          const preview=text.length>70?text.slice(0,70)+'…':text;
+          mentions.filter(m=>m!==user.id).forEach(mid=>{
+            nn[mid]=[...(nn[mid]||[]),{id:uid(),type:'mention',commentId:nc.id,itemId,fromUserId:user.id,preview,read:false,createdAt:new Date().toISOString()}];
+          });
+          await saveNotifs(nn);
+        }
+      };
+      const deleteComment=async(itemId,commentId)=>saveComments({...comments,[itemId]:(comments[itemId]||[]).filter(c=>c.id!==commentId)});
+      const markRead=async()=>{ const updated=(notifs[user.id]||[]).map(n=>({...n,read:true})); await saveNotifs({...notifs,[user.id]:updated}); };
+
+      if(!user) return <LoginScreen onLogin={setUser}/>;
+      if(loading) return <div style={{minHeight:'100vh',background:CREAM,display:'flex',alignItems:'center',justifyContent:'center',color:NAVY,fontSize:16}}>Caricamento…</div>;
+
+      const activeSection=sections.find(s=>s.id===activeSectionId)||sections[0];
+      const sectionItems=items[activeSectionId]||[];
+      const userNotifs=[...(notifs[user.id]||[])].reverse();
+      const unread=userNotifs.filter(n=>!n.read).length;
+
+      return <div style={{display:'flex',minHeight:'100vh',background:CREAM}}>
+        {/* SIDEBAR */}
+        <aside style={{width:224,background:NAVY,color:'#fff',display:'flex',flexDirection:'column',flexShrink:0,position:'sticky',top:0,height:'100vh',overflowY:'auto'}}>
+          <div style={{padding:'22px 20px 18px',borderBottom:'1px solid rgba(237,209,200,0.15)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
+              <svg width="14" height="18" viewBox="0 0 14 18" fill="none"><path d="M7 1C3 1 1 4.5 1 9C1 13.5 3 17 7 17C5 14.5 4 12 4 9C4 6 5 3.5 7 1Z" fill={PINK}/></svg>
+              <span style={{fontFamily:'DM Serif Display,serif',fontSize:16}}>Lunatica Board</span>
+            </div>
+            <p style={{fontSize:10,color:'rgba(237,209,200,0.35)',margin:0,letterSpacing:'0.08em',textTransform:'uppercase'}}>CFP Team</p>
+          </div>
+          <div style={{flex:1,padding:'10px 0',overflowY:'auto'}}>
+            <p style={{fontSize:9,color:'rgba(255,255,255,0.25)',padding:'6px 20px 4px',letterSpacing:'0.1em',textTransform:'uppercase',margin:0}}>Sezioni</p>
+            {sections.map(sec=>(
+              <div key={sec.id} style={{display:'flex',alignItems:'center'}}>
+                <button onClick={()=>{setActiveSectionId(sec.id);setView('items');setActiveItem(null);}}
+                  style={{flex:1,display:'flex',alignItems:'center',gap:8,padding:'10px 20px',background:activeSectionId===sec.id?'rgba(237,209,200,0.12)':'transparent',border:'none',color:'#fff',cursor:'pointer',fontSize:13,fontFamily:'DM Sans,sans-serif',borderLeft:activeSectionId===sec.id?`3px solid ${PINK}`:'3px solid transparent',textAlign:'left'}}>
+                  {sec.emoji} {sec.name}
+                </button>
+                {!sec.isDefault&&<button onClick={()=>deleteSection(sec.id)} style={{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.15)',fontSize:13,paddingRight:14}} onMouseOver={e=>e.target.style.color='#ff8787'} onMouseOut={e=>e.target.style.color='rgba(255,255,255,0.15)'}>×</button>}
+              </div>
+            ))}
+            {showAddSection
+              ?<div style={{padding:'8px 14px'}}>
+                  <input value={newSectionName} onChange={e=>setNewSectionName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addSection();if(e.key==='Escape')setShowAddSection(false);}} placeholder="Nome sezione…" autoFocus
+                    style={{width:'100%',padding:'7px 10px',background:'rgba(255,255,255,0.08)',border:'1px solid rgba(237,209,200,0.25)',borderRadius:6,color:'#fff',fontSize:12,fontFamily:'DM Sans,sans-serif',outline:'none',boxSizing:'border-box'}}/>
+                  <div style={{display:'flex',gap:6,marginTop:6}}>
+                    <button onClick={addSection} style={{flex:1,padding:'5px',background:PINK,color:NAVY,border:'none',borderRadius:5,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:'DM Sans,sans-serif'}}>Crea</button>
+                    <button onClick={()=>{setShowAddSection(false);setNewSectionName('');}} style={{flex:1,padding:'5px',background:'rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.6)',border:'none',borderRadius:5,cursor:'pointer',fontSize:11,fontFamily:'DM Sans,sans-serif'}}>✕</button>
+                  </div>
+                </div>
+              :<button onClick={()=>setShowAddSection(true)} style={{display:'flex',alignItems:'center',gap:6,width:'100%',padding:'8px 20px',background:'none',border:'none',color:'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:12,fontFamily:'DM Sans,sans-serif',textAlign:'left'}}>+ Nuova sezione</button>
+            }
+          </div>
+          <div style={{borderTop:'1px solid rgba(237,209,200,0.15)',padding:'14px 20px'}}>
+            <div style={{position:'relative',marginBottom:12}}>
+              <button onClick={()=>{setShowNotifs(!showNotifs);if(!showNotifs)markRead();}}
+                style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'8px 12px',background:'rgba(237,209,200,0.08)',border:'1px solid rgba(237,209,200,0.18)',borderRadius:8,color:'#fff',cursor:'pointer',fontFamily:'DM Sans,sans-serif',fontSize:13}}>
+                🔔 <span style={{flex:1,textAlign:'left'}}>Notifiche</span>
+                {unread>0&&<span style={{background:'#ff4757',color:'#fff',borderRadius:10,minWidth:18,height:18,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,padding:'0 4px'}}>{unread}</span>}
+              </button>
+              {showNotifs&&<div style={{position:'absolute',bottom:'110%',left:0,width:310,background:'#fff',borderRadius:14,border:`1px solid ${PINK}`,zIndex:200,maxHeight:380,overflowY:'auto',boxShadow:'0 -4px 24px rgba(6,21,63,0.15)'}}>
+                <div style={{padding:'13px 16px',borderBottom:`1px solid ${PINK}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <span style={{fontFamily:'DM Serif Display,serif',fontSize:15,color:NAVY}}>Notifiche</span>
+                  <button onClick={()=>setShowNotifs(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#aaa',fontSize:16,lineHeight:1}}>×</button>
+                </div>
+                {userNotifs.length===0
+                  ?<p style={{padding:'24px 16px',color:'#ccc',fontSize:13,margin:0,textAlign:'center'}}>Nessuna notifica ancora 🌙</p>
+                  :userNotifs.map(n=>{
+                      const allItems=Object.values(items).flat();
+                      const targetItem=allItems.find(i=>i.id===n.itemId);
+                      return <div key={n.id} onClick={()=>{ if(targetItem){setActiveSectionId(targetItem.sectionId);setActiveItem(targetItem);setView('detail');setShowNotifs(false);}}}
+                        style={{padding:'12px 16px',borderBottom:'1px solid #f8f9fa',cursor:targetItem?'pointer':'default',background:n.read?'transparent':'rgba(237,209,200,0.18)',display:'flex',gap:10,alignItems:'flex-start'}}>
+                        <Av uid={n.fromUserId} size={26}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <p style={{margin:'0 0 3px',fontSize:12,color:NAVY,lineHeight:1.3}}><strong>{USERS[n.fromUserId]&&USERS[n.fromUserId].name}</strong> ti ha taggato</p>
+                          <p style={{margin:'0 0 4px',fontSize:11,color:'#888',lineHeight:1.4,fontStyle:'italic',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>"{n.preview}"</p>
+                          <p style={{margin:0,fontSize:10,color:'#ccc'}}>{fmtTime(n.createdAt)}{targetItem?' · '+targetItem.name:''}</p>
+                        </div>
+                        {!n.read&&<div style={{width:7,height:7,borderRadius:'50%',background:'#ff4757',flexShrink:0,marginTop:3}}/>}
+                      </div>;
+                    })
+                }
+              </div>}
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+              <Av uid={user.id} size={28}/>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{margin:0,fontSize:13,fontWeight:700}}>{user.name}</p>
+                <p style={{margin:0,fontSize:10,color:'rgba(255,255,255,0.35)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.email}</p>
+              </div>
+            </div>
+            <button onClick={()=>{setUser(null);setView('items');setActiveSectionId('lanci');setActiveItem(null);}} style={{width:'100%',padding:'7px',background:'rgba(237,209,200,0.07)',border:'1px solid rgba(237,209,200,0.15)',borderRadius:6,color:'rgba(255,255,255,0.5)',cursor:'pointer',fontSize:12,fontFamily:'DM Sans,sans-serif'}}>Esci</button>
+          </div>
+        </aside>
+        {/* MAIN */}
+        <main style={{flex:1,overflowX:'hidden'}}>
+          {view==='items'
+            ?<ItemsPage section={activeSection} items={sectionItems} tasks={tasks}
+                onAdd={d=>addItem(activeSectionId,d)}
+                onDelete={id=>deleteItem(activeSectionId,id)}
+                onStatusChange={(id,s)=>updateItemStatus(activeSectionId,id,s)}
+                onSelect={item=>{setActiveItem(item);setView('detail');}}
+              />
+            :<ItemDetailPage
+                item={(items[activeSectionId]||[]).find(i=>i.id===activeItem&&activeItem.id)||activeItem}
+                tasks={tasks[activeItem&&activeItem.id]||[]}
+                comments={comments[activeItem&&activeItem.id]||[]}
+                currentUser={user}
+                sectionName={activeSection&&activeSection.name||''}
+                onBack={()=>{setView('items');setActiveItem(null);}}
+                onAddTask={d=>addTask(activeItem.id,d)}
+                onUpdateTaskStatus={(taskId,s)=>updateTaskStatus(activeItem.id,taskId,s)}
+                onDeleteTask={taskId=>deleteTask(activeItem.id,taskId)}
+                onAddComment={text=>addComment(activeItem.id,text)}
+                onDeleteComment={commentId=>deleteComment(activeItem.id,commentId)}
+              />
+          }
+        </main>
+      </div>;
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<LunaticaBoard/>);
+  </script>
+</body>
+</html>
