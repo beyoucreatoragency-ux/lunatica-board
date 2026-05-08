@@ -217,6 +217,7 @@
       </div>
       {editMode&&<EditTaskModal onClose={()=>setEditMode(false)} task={task} onSave={d=>{onEdit(d);setEditMode(false);}}/>}
       </>;
+    }
 
     function ItemsPage({section,items,tasks,onAdd,onDelete,onEdit,onStatusChange,onSelect,isMobile}){
       const [showModal,setShowModal]=useState(false);const [confirmDel,setConfirmDel]=useState(null);const [editItem,setEditItem]=useState(null);
