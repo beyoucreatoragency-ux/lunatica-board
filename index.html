@@ -34,10 +34,10 @@
       elisa:    { id:'elisa',     name:'Elisa',      email:'elisasinieri@gmail.com', initials:'ES', color:'#2D9E75' },
     };
     const CREDENTIALS={
-      'francesca.concaro@gmail.com':       {id:'francesca',pass:'cfp2025'},
-      'marketing.ludovicapinna@gmail.com': {id:'ludovica', pass:'cfp2025'},
-      'isa_lp97@hotmail.it':               {id:'isa',      pass:'cfp2025'},
-      'elisasinieri@gmail.com':            {id:'elisa',    pass:'cfp2025'},
+      'francesca.concaro@gmail.com':       {id:'francesca',pass:'cfp2026/'},
+      'marketing.ludovicapinna@gmail.com': {id:'ludovica', pass:'cfp2026/'},
+      'isa_lp97@hotmail.it':               {id:'isa',      pass:'cfp2026/'},
+      'elisasinieri@gmail.com':            {id:'elisa',    pass:'cfp2026/'},
     };
     const DEFAULT_SECTION={id:'lanci',name:'Lanci',emoji:'🚀',isDefault:true};
     const TASK_STATUSES=['todo','in-progress','done'];
@@ -157,10 +157,6 @@
           <div style={{marginBottom:24}}><label style={LS}>Password</label><input style={IS} type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==='Enter'&&login()} placeholder="••••••••"/></div>
           {err&&<p style={{color:'#c92a2a',fontSize:13,textAlign:'center',marginBottom:16}}>{err}</p>}
           <button onClick={login} style={{width:'100%',padding:14,background:NAVY,color:'#fff',border:'none',borderRadius:10,fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>Accedi</button>
-          <div style={{marginTop:20,padding:14,background:CREAM,borderRadius:10,fontSize:11,color:'#aaa',lineHeight:1.9}}>
-            <strong style={{color:NAVY,display:'block',marginBottom:2}}>Password iniziale: cfp2025</strong>
-            francesca.concaro@gmail.com · marketing.ludovicapinna@gmail.com · isa_lp97@hotmail.it · elisasinieri@gmail.com
-          </div>
         </div>
       </div>;
     }
