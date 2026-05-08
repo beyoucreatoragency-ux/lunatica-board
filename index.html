@@ -161,15 +161,49 @@
       </div>;
     }
 
-    function TaskCard({task,currentUser,onStatusChange,onDelete}){
+    function EditTaskModal({onClose,onSave,task}){
+      const isMobile=useIsMobile();
+      const [title,setTitle]=useState(task.title||'');
+      const [desc,setDesc]=useState(task.description||'');
+      const [assignedTo,setAssignedTo]=useState(task.assignedTo||'francesca');
+      const [dueDate,setDueDate]=useState(task.dueDate||'');
+      const [status,setStatus]=useState(task.status||'todo');
+      const [files,setFiles]=useState(task.files&&task.files.length?task.files:[{name:'',url:''}]);
+      return <Modal title="Modifica Task" onClose={onClose} wide>
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div><label style={LS}>Titolo *</label><input style={IS} value={title} onChange={e=>setTitle(e.target.value)} autoFocus/></div>
+          <div><label style={LS}>Descrizione</label><textarea style={{...IS,minHeight:60,resize:'vertical'}} value={desc} onChange={e=>setDesc(e.target.value)}/></div>
+          <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:12}}>
+            <div><label style={LS}>Assegna a</label><select style={IS} value={assignedTo} onChange={e=>setAssignedTo(e.target.value)}>{Object.values(USERS).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+            <div><label style={LS}>Scadenza</label><input style={IS} type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></div>
+          </div>
+          <div><label style={LS}>Stato</label>
+            <select style={IS} value={status} onChange={e=>setStatus(e.target.value)}>
+              {TASK_STATUSES.map(s=><option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+            </select>
+          </div>
+          <FileFields files={files} setFiles={setFiles}/>
+          <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}>
+            <Btn v="secondary" onClick={onClose}>Annulla</Btn>
+            <Btn disabled={!title} onClick={()=>onSave({...task,title,description:desc,assignedTo,dueDate,status,files:files.filter(f=>f.url)})}>Salva modifiche</Btn>
+          </div>
+        </div>
+      </Modal>;
+    }
+
+    function TaskCard({task,currentUser,onStatusChange,onDelete,onEdit}){
       const canDel=task.createdBy===currentUser.id||task.assignedTo===currentUser.id;
       const s=STATUS_STYLE[task.status]||STATUS_STYLE.todo;
       const next=TASK_STATUSES[(TASK_STATUSES.indexOf(task.status)+1)%TASK_STATUSES.length];
       const overdue=task.status!=='done'&&isOverdue(task.dueDate);
-      return <div style={{background:'#fff',border:`1px solid ${overdue?'#ff8787':'#eee'}`,borderRadius:10,padding:'12px 12px',marginBottom:8}}>
+      const [editMode,setEditMode]=useState(false);
+      return <><div style={{background:'#fff',border:`1px solid ${overdue?'#ff8787':'#eee'}`,borderRadius:10,padding:'12px 12px',marginBottom:8}}>
         <div style={{display:'flex',justifyContent:'space-between',gap:6,marginBottom:5}}>
           <p style={{margin:0,fontSize:13,fontWeight:600,color:NAVY,lineHeight:1.4,flex:1}}>{task.title}</p>
-          {canDel&&<button onClick={()=>onDelete(task.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:18,padding:'0 2px',flexShrink:0,lineHeight:1}}>×</button>}
+          <div style={{display:'flex',gap:2,flexShrink:0,alignItems:'center'}}>
+            <button onClick={()=>setEditMode(true)} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,padding:'0 3px',lineHeight:1}}>✏️</button>
+            {canDel&&<button onClick={()=>onDelete(task.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:18,padding:'0 2px',lineHeight:1}} onMouseOver={e=>e.target.style.color='#c92a2a'} onMouseOut={e=>e.target.style.color='#ddd'}>×</button>}
+          </div>
         </div>
         {task.description&&<p style={{margin:'0 0 5px',fontSize:12,color:'#999',lineHeight:1.4}}>{task.description}</p>}
         {task.dueDate&&<p style={{margin:'0 0 5px',fontSize:11,color:overdue?'#c92a2a':'#aaa',fontWeight:overdue?700:400}}>📅 {fmtDate(task.dueDate)}{overdue?' ⚠️':''}</p>}
@@ -180,8 +214,9 @@
           <span style={{fontSize:10,color:'#ddd'}}>{fmtDate(task.createdAt)}</span>
           <button onClick={()=>onStatusChange(task.id,next)} style={{fontSize:11,fontWeight:700,padding:'4px 10px',borderRadius:20,border:'none',cursor:'pointer',background:s.bg,color:s.color,fontFamily:'DM Sans,sans-serif'}}>{STATUS_LABEL[task.status]}</button>
         </div>
-      </div>;
-    }
+      </div>
+      {editMode&&<EditTaskModal onClose={()=>setEditMode(false)} task={task} onSave={d=>{onEdit(d);setEditMode(false);}}/>}
+      </>;
 
     function ItemsPage({section,items,tasks,onAdd,onDelete,onEdit,onStatusChange,onSelect,isMobile}){
       const [showModal,setShowModal]=useState(false);const [confirmDel,setConfirmDel]=useState(null);const [editItem,setEditItem]=useState(null);
@@ -240,7 +275,7 @@
       </div>;
     }
 
-    function ItemDetailPage({item,tasks,comments,currentUser,sectionName,onBack,onAddTask,onUpdateTaskStatus,onDeleteTask,onAddComment,onDeleteComment,onEdit,isMobile}){
+    function ItemDetailPage({item,tasks,comments,currentUser,sectionName,onBack,onAddTask,onUpdateTaskStatus,onDeleteTask,onEditTask,onAddComment,onDeleteComment,onEdit,isMobile}){
       const [showAddTask,setShowAddTask]=useState(null);
       const [commentText,setCommentText]=useState('');
       const [editMode,setEditMode]=useState(false);
@@ -286,7 +321,7 @@
               </div>
               <div style={{padding:'8px',minHeight:40}}>
                 {ut.length===0?<p style={{color:'#e0e0e0',fontSize:11,textAlign:'center',margin:'10px 0'}}>Vuota</p>
-                  :ut.map(t=><TaskCard key={t.id} task={t} currentUser={currentUser} onStatusChange={(id,s)=>onUpdateTaskStatus(id,s)} onDelete={id=>onDeleteTask(id)}/>)
+                  :ut.map(t=><TaskCard key={t.id} task={t} currentUser={currentUser} onStatusChange={(id,s)=>onUpdateTaskStatus(id,s)} onDelete={id=>onDeleteTask(id)} onEdit={d=>onEditTask(d)}/>)
                 }
               </div>
             </div>;
@@ -401,6 +436,7 @@
       const addTask=async(itemId,d)=>saveTasks({...tasks,[itemId]:[...(tasks[itemId]||[]),{id:uid(),itemId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'todo'}]});
       const updateTaskStatus=async(itemId,taskId,s)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).map(t=>t.id===taskId?{...t,status:s}:t)});
       const deleteTask=async(itemId,taskId)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).filter(t=>t.id!==taskId)});
+      const editTask=async(itemId,updated)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).map(t=>t.id===updated.id?updated:t)});
       const addComment=async(itemId,text)=>{
         const mentions=Object.values(USERS).filter(u=>text.includes('@'+u.name)).map(u=>u.id);
         const nc={id:uid(),itemId,text,authorId:user.id,createdAt:new Date().toISOString(),mentions};
@@ -561,6 +597,7 @@
                 onAddTask={d=>addTask(activeItem.id,d)}
                 onUpdateTaskStatus={(taskId,s)=>updateTaskStatus(activeItem.id,taskId,s)}
                 onDeleteTask={taskId=>deleteTask(activeItem.id,taskId)}
+                onEditTask={updated=>editTask(activeItem.id,updated)}
                 onAddComment={text=>addComment(activeItem.id,text)}
                 onDeleteComment={commentId=>deleteComment(activeItem.id,commentId)}
                 onEdit={d=>{editItem(activeSectionId,d);setActiveItem(d);}}
