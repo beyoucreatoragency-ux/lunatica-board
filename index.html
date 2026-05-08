@@ -46,8 +46,9 @@
     const TASK_STATUSES=['todo','in-progress','done'];
     const STATUS_LABEL={ todo:'Da fare','in-progress':'In corso',done:'Fatto ✓' };
     const STATUS_STYLE={ todo:{bg:'#f1f3f5',color:'#868e96'},'in-progress':{bg:'#fff3bf',color:'#e67700'},done:{bg:'#d3f9d8',color:'#2f9e44'} };
-    const L_STATUSES=['pianificato','in corso','completato'];
-    const L_STYLE={ pianificato:{bg:PINK,color:NAVY},'in corso':{bg:NAVY,color:'#fff'},completato:{bg:'#d3f9d8',color:'#2f9e44'} };
+    const L_STATUSES=['pianificato','in lavorazione','completato'];
+    const L_STYLE={ pianificato:{bg:'#dbeafe',color:'#1e40af'},'in lavorazione':{bg:'#ffedd5',color:'#c2410c'},completato:{bg:'#dcfce7',color:'#166534'} };
+    const L_BAR={ pianificato:'#93c5fd','in lavorazione':'#fdba74',completato:'#86efac' };
 
     function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
     function fmtDate(d){ return d?new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'}):''; }
@@ -132,6 +133,26 @@
       </Modal>;
     }
 
+    // ── Edit Item Modal ──
+    function EditItemModal({onClose,onSave,item}){
+      const [name,setName]=useState(item.name||'');
+      const [date,setDate]=useState(item.date||'');
+      const [desc,setDesc]=useState(item.description||'');
+      const [files,setFiles]=useState(item.files&&item.files.length?item.files:[{name:'',url:''}]);
+      return <Modal title="Modifica elemento" onClose={onClose} wide>
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div><label style={LS}>Nome *</label><input style={IS} value={name} onChange={e=>setName(e.target.value)} autoFocus/></div>
+          <div><label style={LS}>Data *</label><input style={IS} type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+          <div><label style={LS}>Descrizione</label><textarea style={{...IS,minHeight:80,resize:'vertical'}} value={desc} onChange={e=>setDesc(e.target.value)}/></div>
+          <FileFields files={files} setFiles={setFiles}/>
+          <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}>
+            <Btn v="secondary" onClick={onClose}>Annulla</Btn>
+            <Btn disabled={!name||!date} onClick={()=>onSave({...item,name,date,description:desc,files:files.filter(f=>f.url)})}>Salva modifiche</Btn>
+          </div>
+        </div>
+      </Modal>;
+    }
+
     // ── Login Screen ──
     function LoginScreen({onLogin}){
       const [email,setEmail]=useState('');const [pass,setPass]=useState('');const [err,setErr]=useState('');
@@ -181,8 +202,8 @@
     }
 
     // ── Items Page ──
-    function ItemsPage({section,items,tasks,onAdd,onDelete,onStatusChange,onSelect}){
-      const [showModal,setShowModal]=useState(false);const [confirmDel,setConfirmDel]=useState(null);
+    function ItemsPage({section,items,tasks,onAdd,onDelete,onEdit,onStatusChange,onSelect}){
+      const [showModal,setShowModal]=useState(false);const [confirmDel,setConfirmDel]=useState(null);const [editItem,setEditItem]=useState(null);
       const sorted=[...items].sort((a,b)=>new Date(a.date)-new Date(b.date));
       return <div style={{padding:'36px 40px'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:32}}>
@@ -199,8 +220,9 @@
               const lt=tasks[item.id]||[];const done=lt.filter(t=>t.status==='done').length;
               const prog=lt.length>0?Math.round(done/lt.length*100):0;
               const ls=L_STYLE[item.status]||L_STYLE.pianificato;
+              const barColor=L_BAR[item.status]||L_BAR.pianificato;
               return <div key={item.id} onClick={()=>onSelect(item)} style={{background:'#fff',borderRadius:16,border:`1px solid ${PINK}`,overflow:'hidden',cursor:'pointer'}}>
-                <div style={{height:5,background:item.status==='completato'?'#74c0fc':item.status==='in corso'?NAVY:PINK}}/>
+                <div style={{height:5,background:barColor}}/>
                 <div style={{padding:'20px 20px 16px'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:10}}>
                     <h3 style={{fontFamily:'DM Serif Display,serif',fontSize:18,color:NAVY,margin:0,flex:1}}>{item.name}</h3>
@@ -213,11 +235,12 @@
                     <div style={{height:4,background:'#f1f3f5',borderRadius:2}}><div style={{height:'100%',width:`${prog}%`,background:NAVY,borderRadius:2}}/></div>
                   </div>}
                   {item.files&&item.files.filter(f=>f.url).length>0&&<p style={{fontSize:11,color:'#bbb',margin:'0 0 10px'}}>📎 {item.files.filter(f=>f.url).length} file</p>}
-                  <div style={{display:'flex',gap:8,justifyContent:'flex-end'}} onClick={e=>e.stopPropagation()}>
+                  <div style={{display:'flex',gap:8,justifyContent:'flex-end',alignItems:'center'}} onClick={e=>e.stopPropagation()}>
                     <select value={item.status} onChange={e=>onStatusChange(item.id,e.target.value)} style={{fontSize:11,padding:'4px 8px',border:`1px solid ${PINK}`,borderRadius:6,background:CREAM,color:NAVY,cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>
                       {L_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
                     </select>
-                    <button onClick={()=>setConfirmDel(item)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:16,padding:'2px 4px'}} onMouseOver={e=>e.target.style.color='#c92a2a'} onMouseOut={e=>e.target.style.color='#ddd'}>🗑</button>
+                    <button onClick={()=>setEditItem(item)} style={{background:'none',border:'none',cursor:'pointer',color:'#bbb',fontSize:14,padding:'2px 4px'}} title="Modifica" onMouseOver={e=>e.target.style.color=NAVY} onMouseOut={e=>e.target.style.color='#bbb'}>✏️</button>
+                    <button onClick={()=>setConfirmDel(item)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:15,padding:'2px 4px'}} onMouseOver={e=>e.target.style.color='#c92a2a'} onMouseOut={e=>e.target.style.color='#ddd'}>🗑</button>
                   </div>
                 </div>
               </div>;
@@ -225,6 +248,7 @@
           </div>
         }
         {showModal&&<AddItemModal onClose={()=>setShowModal(false)} sectionName={section.name} onSave={d=>{onAdd(d);setShowModal(false);}}/>}
+        {editItem&&<EditItemModal onClose={()=>setEditItem(null)} item={editItem} onSave={d=>{onEdit(d);setEditItem(null);}}/>}
         {confirmDel&&<Modal title="Elimina elemento" onClose={()=>setConfirmDel(null)}>
           <p style={{color:'#666',marginBottom:24}}>Sicura di voler eliminare <strong>"{confirmDel.name}"</strong>? Verranno eliminate anche tutte le task e i commenti.</p>
           <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
@@ -236,9 +260,10 @@
     }
 
     // ── Item Detail Page ──
-    function ItemDetailPage({item,tasks,comments,currentUser,sectionName,onBack,onAddTask,onUpdateTaskStatus,onDeleteTask,onAddComment,onDeleteComment}){
+    function ItemDetailPage({item,tasks,comments,currentUser,sectionName,onBack,onAddTask,onUpdateTaskStatus,onDeleteTask,onAddComment,onDeleteComment,onEdit}){
       const [showAddTask,setShowAddTask]=useState(null);
       const [commentText,setCommentText]=useState('');
+      const [editMode,setEditMode]=useState(false);
       const handleComment=()=>{ if(!commentText.trim()) return; onAddComment(commentText); setCommentText(''); };
       const renderComment=text=>text.split(/(@\w+)/g).map((p,i)=>{
         const u=Object.values(USERS).find(u=>p==='@'+u.name);
@@ -253,7 +278,10 @@
               <p style={{color:'#aaa',margin:'0 0 8px',fontSize:14}}>📅 {fmtDate(item.date)}</p>
               {item.description&&<p style={{color:'#555',margin:0,fontSize:14,lineHeight:1.6}}>{item.description}</p>}
             </div>
-            <span style={{fontSize:12,fontWeight:700,padding:'5px 14px',borderRadius:20,...(L_STYLE[item.status]||L_STYLE.pianificato)}}>{item.status}</span>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <span style={{fontSize:12,fontWeight:700,padding:'5px 14px',borderRadius:20,...(L_STYLE[item.status]||L_STYLE.pianificato)}}>{item.status}</span>
+              <button onClick={()=>setEditMode(true)} style={{background:'none',border:`1px solid ${PINK}`,borderRadius:8,padding:'6px 12px',cursor:'pointer',fontSize:12,color:NAVY,fontFamily:'DM Sans,sans-serif'}}>✏️ Modifica</button>
+            </div>
           </div>
           {item.files&&item.files.filter(f=>f.url).length>0&&<div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${PINK}`,display:'flex',gap:10,flexWrap:'wrap'}}>
             {item.files.filter(f=>f.url).map((f,i)=><a key={i} href={f.url} target="_blank" rel="noreferrer" style={{display:'inline-flex',alignItems:'center',gap:6,padding:'5px 14px',background:CREAM,border:`1px solid ${PINK}`,borderRadius:20,fontSize:12,color:NAVY,textDecoration:'none',fontFamily:'DM Sans,sans-serif'}}>📎 {f.name||'File'}</a>)}
@@ -319,6 +347,7 @@
           }
         </div>
         {showAddTask&&<AddTaskModal onClose={()=>setShowAddTask(null)} defaultAssignee={showAddTask} onSave={d=>{onAddTask(d);setShowAddTask(null);}}/>}
+        {editMode&&<EditItemModal onClose={()=>setEditMode(false)} item={item} onSave={d=>{onEdit(d);setEditMode(false);}}/>}
       </div>;
     }
 
@@ -372,6 +401,7 @@
         const nc={...comments}; delete nc[id]; await saveComments(nc);
       };
       const updateItemStatus=async(secId,id,s)=>saveItems({...items,[secId]:(items[secId]||[]).map(i=>i.id===id?{...i,status:s}:i)});
+      const editItem=async(secId,updated)=>saveItems({...items,[secId]:(items[secId]||[]).map(i=>i.id===updated.id?updated:i)});
       const addTask=async(itemId,d)=>saveTasks({...tasks,[itemId]:[...(tasks[itemId]||[]),{id:uid(),itemId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'todo'}]});
       const updateTaskStatus=async(itemId,taskId,s)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).map(t=>t.id===taskId?{...t,status:s}:t)});
       const deleteTask=async(itemId,taskId)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).filter(t=>t.id!==taskId)});
@@ -479,6 +509,7 @@
             ?<ItemsPage section={activeSection} items={sectionItems} tasks={tasks}
                 onAdd={d=>addItem(activeSectionId,d)}
                 onDelete={id=>deleteItem(activeSectionId,id)}
+                onEdit={d=>editItem(activeSectionId,d)}
                 onStatusChange={(id,s)=>updateItemStatus(activeSectionId,id,s)}
                 onSelect={item=>{setActiveItem(item);setView('detail');}}
               />
@@ -494,6 +525,7 @@
                 onDeleteTask={taskId=>deleteTask(activeItem.id,taskId)}
                 onAddComment={text=>addComment(activeItem.id,text)}
                 onDeleteComment={commentId=>deleteComment(activeItem.id,commentId)}
+                onEdit={d=>{editItem(activeSectionId,d);setActiveItem(d);}}
               />
           }
         </main>
