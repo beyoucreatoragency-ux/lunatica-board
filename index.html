@@ -592,6 +592,7 @@
       const addCalItem=async(secId,item)=>saveCalendarItems({...calendarItems,[secId]:[...(calendarItems[secId]||[]),item]});
       const editCalItem=async(secId,updated)=>saveCalendarItems({...calendarItems,[secId]:(calendarItems[secId]||[]).map(i=>i.id===updated.id?updated:i)});
       const deleteCalItem=async(secId,id)=>saveCalendarItems({...calendarItems,[secId]:(calendarItems[secId]||[]).filter(i=>i.id!==id)});
+      const addItem=async(secId,d)=>saveItems({...items,[secId]:[...(items[secId]||[]),{id:uid(),sectionId:secId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'pianificato'}]});
       const deleteItem=async(secId,id)=>{
         await saveItems({...items,[secId]:(items[secId]||[]).filter(i=>i.id!==id)});
         const nt={...tasks}; delete nt[id]; await saveTasks(nt);
