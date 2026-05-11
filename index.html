@@ -60,6 +60,12 @@
     const L_STATUSES=['pianificato','in lavorazione','completato'];
     const L_STYLE={pianificato:{bg:'#dbeafe',color:'#1e40af'},'in lavorazione':{bg:'#ffedd5',color:'#c2410c'},completato:{bg:'#dcfce7',color:'#166534'}};
     const L_BAR={pianificato:'#93c5fd','in lavorazione':'#fdba74',completato:'#86efac'};
+    const CAL_TYPES=['Post','Carosello','Reel','Storia'];
+    const CAL_TYPE_STYLE={Post:{bg:PINK,color:NAVY},Carosello:{bg:'#dbeafe',color:'#1e40af'},Reel:{bg:'#f3e8ff',color:'#6b21a8'},Storia:{bg:'#dcfce7',color:'#166534'}};
+    const CAL_STATO=['da fare','in lavorazione','pubblicato'];
+    const CAL_STATO_STYLE={'da fare':{bg:'#f1f3f5',color:'#868e96'},'in lavorazione':{bg:'#fff3bf',color:'#e67700'},pubblicato:{bg:'#d3f9d8',color:'#2f9e44'}};
+    const MESI_IT=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+    const GIORNI_IT=['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
 
     function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
     function fmtDate(d){ return d?new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'}):''; }
@@ -155,6 +161,140 @@
       </Modal>;
     }
 
+    function CalendarItemModal({onClose,onSave,item,date}){
+      const isMobile=useIsMobile();
+      const [titolo,setTitolo]=useState(item?.titolo||'');
+      const [tipologia,setTipologia]=useState(item?.tipologia||'Post');
+      const [descrizione,setDescrizione]=useState(item?.descrizione||'');
+      const [caption,setCaption]=useState(item?.caption||'');
+      const [stato,setStato]=useState(item?.stato||'da fare');
+      const [fileUrl,setFileUrl]=useState(item?.fileUrl||'');
+      const [fileName,setFileName]=useState(item?.fileName||'');
+      const ts=CAL_TYPE_STYLE[tipologia]||CAL_TYPE_STYLE.Post;
+      return <Modal title={item?'Modifica contenuto':'Nuovo contenuto'} onClose={onClose} wide>
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:12}}>
+            <div><label style={LS}>Titolo *</label><input style={IS} value={titolo} onChange={e=>setTitolo(e.target.value)} placeholder="es. Slim Legs Challenge" autoFocus/></div>
+            <div><label style={LS}>Tipologia</label>
+              <div style={{display:'flex',gap:6,flexWrap:'wrap',paddingTop:4}}>
+                {CAL_TYPES.map(t=><button key={t} onClick={()=>setTipologia(t)} style={{padding:'5px 12px',borderRadius:20,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,fontFamily:'DM Sans,sans-serif',background:tipologia===t?CAL_TYPE_STYLE[t].bg:'#f1f3f5',color:tipologia===t?CAL_TYPE_STYLE[t].color:'#888'}}>{t}</button>)}
+              </div>
+            </div>
+          </div>
+          <div><label style={LS}>Descrizione</label><textarea style={{...IS,minHeight:65,resize:'vertical'}} value={descrizione} onChange={e=>setDescrizione(e.target.value)} placeholder="Concept, cosa si vede, note per il team..."/></div>
+          <div style={{borderTop:`1px solid ${PINK}`,paddingTop:14}}>
+            <label style={LS}>Caption</label>
+            <textarea style={{...IS,minHeight:80,resize:'vertical'}} value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Testo pronto per Instagram..."/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:12}}>
+            <div><label style={LS}>Stato</label>
+              <select style={IS} value={stato} onChange={e=>setStato(e.target.value)}>
+                {CAL_STATO.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select>
+            </div>
+            <div><label style={LS}>File (Canva / Drive)</label>
+              <input style={IS} value={fileUrl} onChange={e=>setFileUrl(e.target.value)} placeholder="https://canva.com/..."/>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:4}}>
+            <Btn v="secondary" onClick={onClose}>Annulla</Btn>
+            <Btn disabled={!titolo} onClick={()=>onSave({...(item||{}),titolo,tipologia,descrizione,caption,stato,fileUrl,date})}>Salva</Btn>
+          </div>
+        </div>
+      </Modal>;
+    }
+
+    function CalendarPage({section,calItems,currentUser,isMobile,onAdd,onEdit,onDelete,onToggleView}){
+      const [viewDate,setViewDate]=useState(new Date());
+      const [modalDate,setModalDate]=useState(null);
+      const [editingItem,setEditingItem]=useState(null);
+      const year=viewDate.getFullYear(), month=viewDate.getMonth();
+      const firstDay=(new Date(year,month,1).getDay()||7)-1;
+      const daysInMonth=new Date(year,month+1,0).getDate();
+      const daysInPrev=new Date(year,month,0).getDate();
+      const prevMonth=()=>setViewDate(new Date(year,month-1,1));
+      const nextMonth=()=>setViewDate(new Date(year,month+1,1));
+      const toDateStr=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const today=toDateStr(new Date());
+
+      const cells=[];
+      for(let i=firstDay-1;i>=0;i--) cells.push({day:daysInPrev-i,cur:false,date:toDateStr(new Date(year,month-1,daysInPrev-i))});
+      for(let d=1;d<=daysInMonth;d++) cells.push({day:d,cur:true,date:toDateStr(new Date(year,month,d))});
+      while(cells.length<42) cells.push({day:cells.length-firstDay-daysInMonth+1,cur:false,date:toDateStr(new Date(year,month+1,cells.length-firstDay-daysInMonth+1))});
+
+      const getItems=date=>calItems.filter(i=>i.date===date);
+
+      return <div style={{padding:isMobile?'14px':'32px 40px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,flexWrap:'wrap',gap:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <h1 style={{fontFamily:'DM Serif Display,serif',fontSize:isMobile?22:30,color:NAVY,margin:0}}>{section.emoji} {section.name}</h1>
+            <div style={{display:'flex',gap:4}}>
+              <button onClick={onToggleView} style={{padding:'5px 12px',fontSize:12,borderRadius:6,border:`1px solid ${PINK}`,background:'#fff',color:'#888',cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>📋 Board</button>
+              <button style={{padding:'5px 12px',fontSize:12,borderRadius:6,border:`1.5px solid ${NAVY}`,background:NAVY,color:'#fff',cursor:'default',fontFamily:'DM Sans,sans-serif',fontWeight:600}}>📅 Calendario</button>
+            </div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <button onClick={prevMonth} style={{background:'none',border:`1px solid ${PINK}`,borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:13,color:NAVY,fontFamily:'DM Sans,sans-serif'}}>←</button>
+            <span style={{fontWeight:600,fontSize:15,color:NAVY,minWidth:140,textAlign:'center'}}>{MESI_IT[month]} {year}</span>
+            <button onClick={nextMonth} style={{background:'none',border:`1px solid ${PINK}`,borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:13,color:NAVY,fontFamily:'DM Sans,sans-serif'}}>→</button>
+          </div>
+        </div>
+
+        <div style={{background:'#fff',borderRadius:14,border:`1px solid ${PINK}`,overflow:'hidden',marginBottom:20}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',borderBottom:`1px solid ${PINK}`}}>
+            {GIORNI_IT.map(g=><div key={g} style={{padding:'8px 4px',textAlign:'center',fontSize:11,color:'#aaa',fontWeight:600,letterSpacing:'0.04em',background:CREAM}}>{g}</div>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))'}}>
+            {cells.map((cell,i)=>{
+              const its=getItems(cell.date);
+              const isToday=cell.date===today&&cell.cur;
+              return <div key={i} onClick={()=>{ if(cell.cur){ setModalDate(cell.date); setEditingItem(null); }}}
+                style={{minHeight:isMobile?60:88,padding:'6px 4px',borderRight:i%7!==6?`0.5px solid #f1f3f5`:'none',borderBottom:i<35?`0.5px solid #f1f3f5`:'none',cursor:cell.cur?'pointer':'default',background:cell.cur?'#fff':'#fafaf9',position:'relative'}}>
+                <div style={{display:'flex',justifyContent:'flex-end',marginBottom:2}}>
+                  <span style={{fontSize:11,fontWeight:isToday?700:400,color:isToday?'#fff':cell.cur?'#555':'#ccc',background:isToday?NAVY:'transparent',borderRadius:'50%',width:18,height:18,display:'flex',alignItems:'center',justifyContent:'center'}}>{cell.day}</span>
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                  {its.slice(0,isMobile?1:3).map(it=>{
+                    const ts=CAL_TYPE_STYLE[it.tipologia]||CAL_TYPE_STYLE.Post;
+                    const ss=CAL_STATO_STYLE[it.stato]||CAL_STATO_STYLE['da fare'];
+                    return <div key={it.id} onClick={e=>{e.stopPropagation();setEditingItem(it);setModalDate(it.date);}}
+                      style={{padding:'2px 5px',borderRadius:3,fontSize:10,background:ts.bg,color:ts.color,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',cursor:'pointer',display:'flex',alignItems:'center',gap:3}}>
+                      <span style={{width:5,height:5,borderRadius:'50%',background:ss.color,flexShrink:0}}></span>
+                      {it.titolo}
+                    </div>;
+                  })}
+                  {its.length>3&&!isMobile&&<div style={{fontSize:10,color:'#aaa',paddingLeft:2}}>+{its.length-3} altri</div>}
+                  {its.length>1&&isMobile&&<div style={{fontSize:10,color:'#aaa',paddingLeft:2}}>+{its.length-1}</div>}
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>
+
+        <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+          {CAL_TYPES.map(t=>{const s=CAL_TYPE_STYLE[t];return <div key={t} style={{display:'flex',alignItems:'center',gap:5,fontSize:12,color:'#888'}}>
+            <div style={{width:10,height:10,borderRadius:2,background:s.bg}}></div>{t}
+          </div>;})}
+          <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+            {CAL_STATO.map(s=>{const st=CAL_STATO_STYLE[s];return <div key={s} style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'#999'}}>
+              <div style={{width:7,height:7,borderRadius:'50%',background:st.color}}></div>{s}
+            </div>;})}
+          </div>
+        </div>
+
+        {(modalDate||editingItem)&&<CalendarItemModal
+          date={modalDate}
+          item={editingItem||undefined}
+          onClose={()=>{setModalDate(null);setEditingItem(null);}}
+          onSave={d=>{
+            if(editingItem) onEdit({...d,id:editingItem.id,createdBy:editingItem.createdBy,createdAt:editingItem.createdAt});
+            else onAdd({...d,id:uid(),createdBy:currentUser.id,createdAt:new Date().toISOString()});
+            setModalDate(null); setEditingItem(null);
+          }}
+        />}
+      </div>;
+    }
+
     function LoginScreen({onLogin}){
       const [email,setEmail]=useState('');const [pass,setPass]=useState('');const [err,setErr]=useState('');
       const login=()=>{ const c=CREDENTIALS[email.trim()]; if(c&&c.pass===pass) onLogin(USERS[c.id]); else setErr('Email o password errati'); };
@@ -233,13 +373,19 @@
       </>;
     }
 
-    function ItemsPage({section,items,tasks,onAdd,onDelete,onEdit,onStatusChange,onSelect,isMobile}){
+    function ItemsPage({section,items,tasks,onAdd,onDelete,onEdit,onStatusChange,onSelect,isMobile,onToggleView}){
       const [showModal,setShowModal]=useState(false);const [confirmDel,setConfirmDel]=useState(null);const [editItem,setEditItem]=useState(null);
       const sorted=[...items].sort((a,b)=>new Date(a.date)-new Date(b.date));
       return <div style={{padding:isMobile?'18px 14px':'36px 40px'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:22,gap:12}}>
           <div>
-            <h1 style={{fontFamily:'DM Serif Display,serif',fontSize:isMobile?24:34,color:NAVY,margin:'0 0 4px'}}>{section.emoji} {section.name}</h1>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}>
+              <h1 style={{fontFamily:'DM Serif Display,serif',fontSize:isMobile?24:34,color:NAVY,margin:0}}>{section.emoji} {section.name}</h1>
+              <div style={{display:'flex',gap:4}}>
+                <button style={{padding:'5px 12px',fontSize:12,borderRadius:6,border:`1.5px solid ${NAVY}`,background:NAVY,color:'#fff',cursor:'default',fontFamily:'DM Sans,sans-serif',fontWeight:600}}>📋 Board</button>
+                <button onClick={onToggleView} style={{padding:'5px 12px',fontSize:12,borderRadius:6,border:`1px solid ${PINK}`,background:'#fff',color:'#888',cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>📅 Calendario</button>
+              </div>
+            </div>
             <p style={{color:'#bbb',margin:0,fontSize:12}}>{items.length} elementi</p>
           </div>
           <Btn onClick={()=>setShowModal(true)} style={{marginTop:2,padding:'8px 14px',fontSize:13,whiteSpace:'nowrap'}}>+ Nuovo</Btn>
@@ -398,6 +544,7 @@
       const [tasks,setTasks]=useState({});
       const [comments,setComments]=useState({});
       const [notifs,setNotifs]=useState({});
+      const [calendarItems,setCalendarItems]=useState({});
       const [showNotifs,setShowNotifs]=useState(false);
       const [showAddSection,setShowAddSection]=useState(false);
       const [newSectionName,setNewSectionName]=useState('');
@@ -411,14 +558,15 @@
 
       async function loadAll(){
         setLoading(true);
-        const [s,it,t,c,n]=await Promise.all([dbGet('luna:sections'),dbGet('luna:items'),dbGet('luna:tasks'),dbGet('luna:comments'),dbGet('luna:notifs')]);
-        if(s&&s.length) setSections(s); if(it) setItems(it); if(t) setTasks(t); if(c) setComments(c); if(n) setNotifs(n);
+        const [s,it,t,c,n,ci]=await Promise.all([dbGet('luna:sections'),dbGet('luna:items'),dbGet('luna:tasks'),dbGet('luna:comments'),dbGet('luna:notifs'),dbGet('luna:calItems')]);
+        if(s&&s.length) setSections(s); if(it) setItems(it); if(t) setTasks(t); if(c) setComments(c); if(n) setNotifs(n); if(ci) setCalendarItems(ci);
         setLoading(false);
       }
 
       const saveSections=async d=>{setSections(d);await dbSet('luna:sections',d);};
       const saveItems   =async d=>{setItems(d);   await dbSet('luna:items',d);};
       const saveTasks   =async d=>{setTasks(d);   await dbSet('luna:tasks',d);};
+      const saveCalendarItems=async d=>{setCalendarItems(d);await dbSet('luna:calItems',d);};
       const saveComments=async d=>{setComments(d);await dbSet('luna:comments',d);};
       const saveNotifs  =async d=>{setNotifs(d);  await dbSet('luna:notifs',d);};
 
@@ -440,7 +588,10 @@
         await saveSections(sections.map(s=>s.id===id?{...s,name:newName.trim()}:s));
         setRenamingSection(null); setRenameValue('');
       };
-      const addItem=async(secId,d)=>saveItems({...items,[secId]:[...(items[secId]||[]),{id:uid(),sectionId:secId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'pianificato'}]});
+      const toggleSectionView=async id=>saveSections(sections.map(s=>s.id===id?{...s,viewType:s.viewType==='calendar'?'board':'calendar'}:s));
+      const addCalItem=async(secId,item)=>saveCalendarItems({...calendarItems,[secId]:[...(calendarItems[secId]||[]),item]});
+      const editCalItem=async(secId,updated)=>saveCalendarItems({...calendarItems,[secId]:(calendarItems[secId]||[]).map(i=>i.id===updated.id?updated:i)});
+      const deleteCalItem=async(secId,id)=>saveCalendarItems({...calendarItems,[secId]:(calendarItems[secId]||[]).filter(i=>i.id!==id)});
       const deleteItem=async(secId,id)=>{
         await saveItems({...items,[secId]:(items[secId]||[]).filter(i=>i.id!==id)});
         const nt={...tasks}; delete nt[id]; await saveTasks(nt);
@@ -597,13 +748,21 @@
         {/* MAIN */}
         <main style={{flex:1,overflowX:'hidden',paddingTop:isMobile?54:0}}>
           {view==='items'
-            ?<ItemsPage section={activeSection} items={sectionItems} tasks={tasks} isMobile={isMobile}
-                onAdd={d=>addItem(activeSectionId,d)}
-                onDelete={id=>deleteItem(activeSectionId,id)}
-                onEdit={d=>editItem(activeSectionId,d)}
-                onStatusChange={(id,s)=>updateItemStatus(activeSectionId,id,s)}
-                onSelect={item=>{setActiveItem(item);setView('detail');}}
-              />
+            ? activeSection?.viewType==='calendar'
+              ? <CalendarPage section={activeSection} calItems={calendarItems[activeSectionId]||[]} currentUser={user} isMobile={isMobile}
+                  onAdd={item=>addCalItem(activeSectionId,item)}
+                  onEdit={item=>editCalItem(activeSectionId,item)}
+                  onDelete={id=>deleteCalItem(activeSectionId,id)}
+                  onToggleView={()=>toggleSectionView(activeSectionId)}
+                />
+              : <ItemsPage section={activeSection} items={sectionItems} tasks={tasks} isMobile={isMobile}
+                  onAdd={d=>addItem(activeSectionId,d)}
+                  onDelete={id=>deleteItem(activeSectionId,id)}
+                  onEdit={d=>editItem(activeSectionId,d)}
+                  onStatusChange={(id,s)=>updateItemStatus(activeSectionId,id,s)}
+                  onSelect={item=>{setActiveItem(item);setView('detail');}}
+                  onToggleView={()=>toggleSectionView(activeSectionId)}
+                />
             :<ItemDetailPage
                 item={(items[activeSectionId]||[]).find(i=>i.id===activeItem?.id)||activeItem}
                 tasks={tasks[activeItem?.id]||[]}
