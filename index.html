@@ -165,6 +165,291 @@
       const [viewDate,setViewDate]=useState(new Date());
       const [calComment,setCalComment]=useState('');
       const [panelOpen,setPanelOpen]=useState(false);
+      const [panelMode,setPanelMode]=useState('item'); // 'item' | 'stories'
+      const [selItem,setSelItem]=useState(null);
+      const [selDate,setSelDate]=useState(null);
+      const [selStories,setSelStories]=useState([]);
+      const [pTitolo,setPTitolo]=useState('');
+      const [pTipologia,setPTipologia]=useState('Post');
+      const [pDescrizione,setPDescrizione]=useState('');
+      const [pCaption,setPCaption]=useState('');
+      const [pStato,setPStato]=useState('da fare');
+      const [pFileUrl,setPFileUrl]=useState('');
+      const [dragItem,setDragItem]=useState(null);
+      const [dragOver,setDragOver]=useState(null);
+
+      const year=viewDate.getFullYear(),month=viewDate.getMonth();
+      const firstDay=(new Date(year,month,1).getDay()||7)-1;
+      const daysInMonth=new Date(year,month+1,0).getDate();
+      const daysInPrev=new Date(year,month,0).getDate();
+      const toDS=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const today=toDS(new Date());
+      const monthPrefix=`${year}-${String(month+1).padStart(2,'0')}`;
+
+      const cells=[];
+      for(let i=firstDay-1;i>=0;i--) cells.push({day:daysInPrev-i,cur:false,date:toDS(new Date(year,month-1,daysInPrev-i))});
+      for(let d=1;d<=daysInMonth;d++) cells.push({day:d,cur:true,date:toDS(new Date(year,month,d))});
+      while(cells.length<42) cells.push({day:cells.length-firstDay-daysInMonth+1,cur:false,date:toDS(new Date(year,month+1,cells.length-firstDay-daysInMonth+1))});
+
+      const getFeed=date=>calItems.filter(i=>i.date===date&&i.tipologia!=='Storia');
+      const getStories=date=>calItems.filter(i=>i.date===date&&i.tipologia==='Storia');
+
+      // Stats for current month
+      const monthFeed=calItems.filter(i=>i.date.startsWith(monthPrefix)&&i.tipologia!=='Storia');
+      const monthStories=calItems.filter(i=>i.date.startsWith(monthPrefix)&&i.tipologia==='Storia');
+      const storyDays=new Set(monthStories.map(s=>s.date)).size;
+      const statsCounts={Post:monthFeed.filter(i=>i.tipologia==='Post').length,Carosello:monthFeed.filter(i=>i.tipologia==='Carosello').length,Reel:monthFeed.filter(i=>i.tipologia==='Reel').length};
+
+      const openItem=item=>{setSelItem(item);setSelDate(item.date);setPTitolo(item.titolo||'');setPTipologia(item.tipologia||'Post');setPDescrizione(item.descrizione||'');setPCaption(item.caption||'');setPStato(item.stato||'da fare');setPFileUrl(item.fileUrl||'');setPanelMode('item');setPanelOpen(true);};
+      const openNew=date=>{setSelItem(null);setSelDate(date);setPTitolo('');setPTipologia('Post');setPDescrizione('');setPCaption('');setPStato('da fare');setPFileUrl('');setPanelMode('item');setPanelOpen(true);};
+      const openStories=(date,stories)=>{setSelDate(date);setSelStories(stories);setPanelMode('stories');setPanelOpen(true);};
+
+      const savePanel=()=>{
+        if(!pTitolo.trim()) return;
+        const data={titolo:pTitolo,tipologia:pTipologia,descrizione:pDescrizione,caption:pCaption,stato:pStato,fileUrl:pFileUrl,date:selDate};
+        if(selItem) onEdit({...data,id:selItem.id,createdBy:selItem.createdBy,createdAt:selItem.createdAt,sectionId:selItem.sectionId});
+        else onAdd({...data,id:uid(),createdBy:currentUser.id,createdAt:new Date().toISOString()});
+        setPanelOpen(false);
+      };
+
+      const editStoryFromPanel=item=>{setSelItem(item);setPTitolo(item.titolo||'');setPTipologia('Storia');setPDescrizione(item.descrizione||'');setPCaption(item.caption||'');setPStato(item.stato||'da fare');setPFileUrl(item.fileUrl||'');setPanelMode('item');};
+
+      const TS={Post:{bg:PINK,color:'#7a3828'},Carosello:{bg:'#D8D0E7',color:'#3a2060'},Reel:{bg:'#A8C8E0',color:'#1a3a5e'},Storia:{bg:'#B8D4B0',color:'#2a5020'}};
+      const SD={'da fare':'#bbb','in lavorazione':'#e67700',pubblicato:'#2f9e44'};
+      const fmtPD=d=>{if(!d)return'';return new Date(d+'T12:00:00').toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});};
+
+      return <div style={{padding:isMobile?'14px':'32px 40px'}}>
+        {/* Header */}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            <h1 style={{fontFamily:'DM Serif Display,serif',fontSize:isMobile?20:28,color:NAVY,margin:0}}>{section.emoji} {section.name}</h1>
+            <div style={{display:'flex',gap:4}}>
+              <button onClick={onToggleView} style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:`1px solid ${PINK}`,background:'#fff',color:'#999',cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>📋 Board</button>
+              <button style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:`1.5px solid ${NAVY}`,background:NAVY,color:'#fff',fontFamily:'DM Sans,sans-serif',fontWeight:600}}>📅 Calendario</button>
+            </div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <button onClick={()=>setViewDate(new Date(year,month-1,1))} style={{background:'none',border:`1px solid ${PINK}`,borderRadius:6,padding:'5px 12px',cursor:'pointer',fontSize:13,color:NAVY}}>←</button>
+            <span style={{fontWeight:600,fontSize:14,color:NAVY,minWidth:130,textAlign:'center'}}>{MESI_IT[month]} {year}</span>
+            <button onClick={()=>setViewDate(new Date(year,month+1,1))} style={{background:'none',border:`1px solid ${PINK}`,borderRadius:6,padding:'5px 12px',cursor:'pointer',fontSize:13,color:NAVY}}>→</button>
+          </div>
+        </div>
+
+        {/* Stats bar */}
+        <div style={{background:'#fff',borderRadius:12,border:`1px solid ${PINK}`,display:'flex',marginBottom:16,overflow:'hidden'}}>
+          <div style={{flex:1,padding:'10px 0',borderRight:`1px solid ${PINK}`}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:'DM Serif Display,serif',fontSize:22,color:NAVY,lineHeight:1}}>{monthFeed.length}</div>
+              <div style={{fontSize:9,color:NAVY,opacity:0.4,letterSpacing:'0.08em',textTransform:'uppercase',marginTop:2}}>Post feed</div>
+            </div>
+          </div>
+          {Object.entries(statsCounts).map(([tipo,n])=><div key={tipo} style={{flex:1,padding:'10px 0',borderRight:`1px solid ${PINK}`}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:'DM Serif Display,serif',fontSize:22,color:NAVY,lineHeight:1}}>{n}</div>
+              <div style={{fontSize:9,color:NAVY,opacity:0.4,letterSpacing:'0.08em',textTransform:'uppercase',marginTop:2}}>{tipo}</div>
+            </div>
+          </div>)}
+          <div style={{flex:1,padding:'10px 0'}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:'DM Serif Display,serif',fontSize:22,color:NAVY,lineHeight:1}}>{storyDays}</div>
+              <div style={{fontSize:9,color:NAVY,opacity:0.4,letterSpacing:'0.08em',textTransform:'uppercase',marginTop:2}}>Giorni stories</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:12,alignItems:'center'}}>
+          <div style={{fontSize:10,color:'#aaa',fontWeight:600,letterSpacing:'0.06em',textTransform:'uppercase'}}>Feed:</div>
+          {Object.entries(TS).filter(([t])=>t!=='Storia').map(([t,s])=><div key={t} style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'#888'}}><div style={{width:10,height:10,borderRadius:2,background:s.bg}}/>{t}</div>)}
+          <div style={{marginLeft:12,fontSize:10,color:'#aaa',fontWeight:600,letterSpacing:'0.06em',textTransform:'uppercase'}}>Stories:</div>
+          <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'#888'}}><div style={{width:10,height:10,borderRadius:'50%',background:'#B8D4B0'}}/> Giorni con stories</div>
+          <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+            {Object.entries(SD).map(([s,c])=><div key={s} style={{display:'flex',alignItems:'center',gap:4,fontSize:10,color:'#999'}}><div style={{width:7,height:7,borderRadius:'50%',background:c}}/>{s}</div>)}
+          </div>
+        </div>
+
+        {/* Calendar grid */}
+        <div style={{background:'#fff',borderRadius:14,border:`1px solid ${PINK}`,overflow:'hidden',marginBottom:24}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',borderBottom:`1px solid ${PINK}`}}>
+            {GIORNI_IT.map((g,i)=><div key={g} style={{padding:'7px 4px',textAlign:'center',fontSize:9,color:i>=5?'#ccc':'#aaa',fontWeight:700,letterSpacing:'0.12em',textTransform:'uppercase',background:CREAM}}>{g}</div>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))'}}>
+            {cells.map((cell,i)=>{
+              const feed=getFeed(cell.date),stories=getStories(cell.date);
+              const isToday=cell.date===today&&cell.cur;
+              const isWeekend=i%7===5||i%7===6;
+              const isDragOver=dragOver===cell.date&&cell.cur;
+              return <div key={i}
+                onDragOver={e=>{e.preventDefault();if(cell.cur)setDragOver(cell.date);}}
+                onDragLeave={()=>setDragOver(null)}
+                onDrop={e=>{e.preventDefault();if(dragItem&&cell.cur&&cell.date!==dragItem.date){onEdit({...dragItem,date:cell.date});}setDragItem(null);setDragOver(null);}}
+                style={{minHeight:isMobile?65:115,padding:'5px 5px 4px',borderRight:i%7!==6?'0.5px solid #f1f3f5':'none',borderBottom:i<35?'0.5px solid #f1f3f5':'none',cursor:cell.cur&&!isWeekend?'default':'default',background:isDragOver?'#eef3fa':!cell.cur?'#fafaf9':isWeekend?'#f7f5f3':'#fff',opacity:!cell.cur?0.4:isWeekend?0.55:1,display:'flex',flexDirection:'column',gap:2,transition:'background 0.15s',boxSizing:'border-box',outline:isDragOver?`2px solid ${NAVY}`:'none'}}>
+                {/* Day number + add button */}
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:1}}>
+                  <span style={{fontSize:10,fontWeight:isToday?700:400,color:isToday?'#fff':cell.cur?'#555':'#ccc',background:isToday?NAVY:'transparent',borderRadius:'50%',width:18,height:18,display:'flex',alignItems:'center',justifyContent:'center'}}>{cell.day}</span>
+                  {cell.cur&&!isWeekend&&<button onClick={()=>openNew(cell.date)}
+                    style={{background:'none',border:'none',cursor:'pointer',color:'#ccc',fontSize:13,padding:'0 2px',lineHeight:1,display:'flex',alignItems:'center'}} onMouseOver={e=>e.target.style.color=NAVY} onMouseOut={e=>e.target.style.color='#ccc'}>+</button>}
+                </div>
+                {/* Feed items */}
+                {feed.slice(0,isMobile?1:2).map(item=>{const ts=TS[item.tipologia]||TS.Post,sd=SD[item.stato]||'#bbb';
+                  return <div key={item.id}
+                    draggable={true}
+                    onDragStart={e=>{e.stopPropagation();setDragItem(item);}}
+                    onDragEnd={()=>setDragItem(null)}
+                    onClick={e=>{e.stopPropagation();openItem(item);}}
+                    style={{padding:'2px 5px',borderRadius:4,fontSize:9,background:ts.bg,color:ts.color,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',cursor:'grab',display:'flex',alignItems:'center',gap:3,fontWeight:600,userSelect:'none'}}>
+                    <span style={{width:5,height:5,borderRadius:'50%',background:sd,flexShrink:0}}/>
+                    {item.tipologia.toUpperCase()} · {item.titolo}
+                  </div>;})}
+                {feed.length>2&&!isMobile&&<div style={{fontSize:9,color:'#bbb',paddingLeft:2}}>+{feed.length-2}</div>}
+                {/* Stories grouped */}
+                {stories.length>0&&cell.cur&&<div style={{marginTop:'auto',paddingTop:stories.length&&feed.length?2:0,borderTop:stories.length&&feed.length?'1px dashed #eee':'none'}}>
+                  <span onClick={e=>{e.stopPropagation();openStories(cell.date,stories);}}
+                    style={{fontSize:8,padding:'2px 6px',borderRadius:10,background:'#B8D4B0',color:'#2a5020',cursor:'pointer',fontWeight:700,display:'inline-block'}}>
+                    ◉ {stories.length===1?'Storia':'Storie ('+stories.length+')'}
+                  </span>
+                </div>}
+              </div>;})}
+          </div>
+        </div>
+
+        {/* Comments */}
+        <h2 style={{fontFamily:'DM Serif Display,serif',fontSize:isMobile?17:20,color:NAVY,margin:'0 0 12px'}}>Commenti</h2>
+        <div style={{background:'#fff',borderRadius:12,border:`1px solid ${PINK}`,overflow:'hidden',marginBottom:40}}>
+          <div style={{padding:isMobile?'12px':'14px 18px',borderBottom:`1px solid ${PINK}`}}>
+            <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+              <Av uid={currentUser.id} size={30}/>
+              <div style={{flex:1}}>
+                <textarea value={calComment} onChange={e=>setCalComment(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(calComment.trim()){onAddComment(calComment);setCalComment('');}}}}
+                  placeholder="Scrivi un commento…" style={{width:'100%',padding:'9px 12px',border:`1.5px solid ${PINK}`,borderRadius:10,fontSize:13,fontFamily:'DM Sans,sans-serif',outline:'none',resize:'none',minHeight:50,boxSizing:'border-box',background:CREAM,color:NAVY}}/>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:7,flexWrap:'wrap',gap:6}}>
+                  <div style={{display:'flex',gap:4,flexWrap:'wrap',alignItems:'center'}}><span style={{fontSize:11,color:'#ccc'}}>@:</span>
+                    {Object.values(USERS).map(u=><button key={u.id} onClick={()=>setCalComment(p=>p+'@'+u.name+' ')} style={{fontSize:11,padding:'3px 8px',background:CREAM,border:`1px solid ${PINK}`,borderRadius:20,cursor:'pointer',color:NAVY,fontFamily:'DM Sans,sans-serif'}}>@{u.name}</button>)}
+                  </div>
+                  <Btn onClick={()=>{if(calComment.trim()){onAddComment(calComment);setCalComment('');} }} disabled={!calComment.trim()} style={{padding:'6px 14px',fontSize:12}}>Invia</Btn>
+                </div>
+              </div>
+            </div>
+          </div>
+          {!comments||comments.length===0
+            ?<p style={{color:'#ccc',textAlign:'center',padding:'20px',margin:0,fontSize:13}}>Nessun commento ancora.</p>
+            :[...comments].reverse().map(c=>{const author=USERS[c.authorId];const rC=text=>text.split(/(@\w+)/g).map((p,i)=>{const u=Object.values(USERS).find(u=>p==='@'+u.name);return u?<strong key={i} style={{color:NAVY,background:PINK,padding:'1px 5px',borderRadius:3}}>{p}</strong>:p;});
+              return <div key={c.id} style={{padding:isMobile?'11px 12px':'13px 18px',borderBottom:'1px solid #f8f9fa',display:'flex',gap:10}}>
+                <Av uid={c.authorId} size={26}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
+                    <span style={{fontWeight:700,fontSize:13,color:NAVY}}>{author?.name}</span>
+                    <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                      <span style={{fontSize:10,color:'#ccc'}}>{fmtTime(c.createdAt)}</span>
+                      {c.authorId===currentUser.id&&<button onClick={()=>onDeleteComment(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:14,padding:0}}>×</button>}
+                    </div>
+                  </div>
+                  <p style={{margin:0,fontSize:13,color:'#444',lineHeight:1.5,wordBreak:'break-word'}}>{rC(c.text)}</p>
+                </div>
+              </div>;})}
+        </div>
+
+        {/* Backdrop */}
+        {panelOpen&&<div onClick={()=>setPanelOpen(false)} style={{position:'fixed',inset:0,background:'rgba(6,21,63,0.3)',zIndex:498}}/>}
+
+        {/* SLIDE-OUT PANEL */}
+        <div style={{position:'fixed',right:0,top:0,width:isMobile?'100%':400,height:'100vh',background:'#fff',boxShadow:'-8px 0 40px rgba(6,21,63,0.13)',zIndex:499,display:'flex',flexDirection:'column',transform:panelOpen?'translateX(0)':'translateX(100%)',transition:'transform 0.28s cubic-bezier(.4,0,.2,1)'}}>
+
+          {panelMode==='stories'
+            /* ── STORIES PANEL ── */
+            ?<>
+              <div style={{background:NAVY,padding:'18px 22px',flexShrink:0}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                  <div style={{fontSize:9,color:'rgba(255,255,255,0.38)',letterSpacing:'0.12em',textTransform:'uppercase'}}>{fmtPD(selDate)}</div>
+                  <button onClick={()=>setPanelOpen(false)} style={{background:'rgba(255,255,255,0.12)',border:'none',color:'#fff',width:28,height:28,borderRadius:'50%',cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+                </div>
+                <div style={{fontFamily:'DM Serif Display,serif',color:'#fff',fontSize:18,marginBottom:8}}>◉ Stories — {selStories.length} contenut{selStories.length===1?'o':'i'}</div>
+                <button onClick={()=>openNew(selDate)} style={{fontSize:11,padding:'5px 14px',borderRadius:20,background:'rgba(237,209,200,0.2)',border:'1px solid rgba(237,209,200,0.4)',color:'rgba(255,255,255,0.9)',cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>+ Aggiungi storia</button>
+              </div>
+              <div style={{flex:1,overflowY:'auto',padding:'16px 22px'}}>
+                {selStories.map((s,idx)=><div key={s.id} style={{padding:'14px',background:CREAM,borderRadius:10,marginBottom:10,border:`1px solid ${PINK}`}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:9,fontWeight:700,color:NAVY,opacity:0.4,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:3}}>Storia {idx+1}</div>
+                      <div style={{fontSize:13,fontWeight:600,color:NAVY,lineHeight:1.4}}>{s.titolo}</div>
+                    </div>
+                    <div style={{display:'flex',gap:6,flexShrink:0,marginLeft:8}}>
+                      <button onClick={()=>editStoryFromPanel(s)} style={{fontSize:11,padding:'4px 10px',borderRadius:6,border:`1px solid ${NAVY}`,background:'#fff',color:NAVY,cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>✏️</button>
+                      <button onClick={()=>{onDelete(s.id);setSelStories(prev=>prev.filter(x=>x.id!==s.id));}} style={{fontSize:11,padding:'4px 10px',borderRadius:6,border:'1px solid #c92a2a',background:'#fff',color:'#c92a2a',cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>🗑</button>
+                    </div>
+                  </div>
+                  {s.descrizione&&<div style={{fontSize:12,color:'#666',lineHeight:1.5,marginBottom:6}}>{s.descrizione}</div>}
+                  {s.caption&&<div style={{padding:'8px 10px',background:'#fff',borderRadius:6,borderLeft:`3px solid ${PINK}`,fontSize:12,color:'#555',lineHeight:1.5,fontStyle:'italic',whiteSpace:'pre-line'}}>{s.caption}</div>}
+                  <div style={{marginTop:8,display:'flex',gap:6,alignItems:'center'}}>
+                    <span style={{fontSize:10,fontWeight:700,...(CAL_STATO_STYLE[s.stato]||CAL_STATO_STYLE['da fare']),padding:'2px 8px',borderRadius:10}}>{(s.stato||'da fare').charAt(0).toUpperCase()+(s.stato||'da fare').slice(1)}</span>
+                  </div>
+                </div>)}
+                {selStories.length===0&&<p style={{color:'#ccc',textAlign:'center',marginTop:40,fontSize:13}}>Nessuna storia per questo giorno.</p>}
+              </div>
+            </>
+
+            /* ── ITEM PANEL ── */
+            :<>
+              <div style={{background:NAVY,padding:'18px 22px',flexShrink:0}}>
+                <div style={{display:'flex',justifyContent:'flex-end',marginBottom:10}}>
+                  {panelMode==='item'&&selStories.length>0&&<button onClick={()=>{setPanelMode('stories');}} style={{background:'rgba(255,255,255,0.1)',border:'none',color:'rgba(255,255,255,0.7)',fontSize:11,padding:'4px 10px',borderRadius:6,cursor:'pointer',marginRight:'auto',fontFamily:'DM Sans,sans-serif'}}>← Stories</button>}
+                  <button onClick={()=>setPanelOpen(false)} style={{background:'rgba(255,255,255,0.12)',border:'none',color:'#fff',width:28,height:28,borderRadius:'50%',cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+                </div>
+                <div style={{fontSize:9,color:'rgba(255,255,255,0.38)',letterSpacing:'0.12em',textTransform:'uppercase',marginBottom:5}}>{fmtPD(selDate)}</div>
+                <input value={pTitolo} onChange={e=>setPTitolo(e.target.value)} placeholder="Titolo contenuto…"
+                  style={{background:'transparent',border:'none',borderBottom:'1px solid rgba(255,255,255,0.2)',color:'#fff',fontSize:17,fontFamily:'DM Serif Display,serif',outline:'none',width:'100%',marginBottom:12,paddingBottom:6}}/>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  {CAL_TYPES.map(t=>{const ts=TS[t]||{};return <button key={t} onClick={()=>setPTipologia(t)}
+                    style={{padding:'3px 10px',borderRadius:20,border:'none',cursor:'pointer',fontSize:9,fontWeight:700,letterSpacing:'0.04em',textTransform:'uppercase',background:pTipologia===t?(ts.bg||PINK):'rgba(255,255,255,0.1)',color:pTipologia===t?(ts.color||NAVY):'rgba(255,255,255,0.6)'}}>{t}</button>;})}
+                </div>
+              </div>
+              <div style={{flex:1,overflowY:'auto',padding:'18px 22px'}}>
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:9,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',color:NAVY,opacity:0.32,marginBottom:7}}>Stato</div>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    {CAL_STATO.map(s=><button key={s} onClick={()=>setPStato(s)}
+                      style={{padding:'4px 12px',borderRadius:20,border:'none',cursor:'pointer',fontSize:11,fontWeight:600,fontFamily:'DM Sans,sans-serif',...(pStato===s?CAL_STATO_STYLE[s]:{background:'#f1f3f5',color:'#999'})}}>
+                      {s.charAt(0).toUpperCase()+s.slice(1)}
+                    </button>)}
+                  </div>
+                </div>
+                <hr style={{border:'none',borderTop:`1px solid ${PINK}`,margin:'0 0 14px'}}/>
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:9,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',color:NAVY,opacity:0.32,marginBottom:7}}>Note di produzione</div>
+                  <textarea value={pDescrizione} onChange={e=>setPDescrizione(e.target.value)} placeholder="Note per il team, concept, cosa si vede…"
+                    style={{width:'100%',padding:'10px 12px',border:`1px solid ${PINK}`,borderRadius:8,fontSize:13,fontFamily:'DM Sans,sans-serif',outline:'none',resize:'vertical',minHeight:80,boxSizing:'border-box',background:CREAM,color:NAVY,lineHeight:1.6}}/>
+                </div>
+                <hr style={{border:'none',borderTop:`1px solid ${PINK}`,margin:'0 0 14px'}}/>
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:9,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',color:NAVY,opacity:0.32,marginBottom:7}}>
+                    {pTipologia==='Carosello'?'Script slide':pTipologia==='Storia'?'Script storia':'Caption / Copy'}
+                  </div>
+                  <textarea value={pCaption} onChange={e=>setPCaption(e.target.value)}
+                    placeholder={pTipologia==='Carosello'?'Slide 1 — Cover\nTesto...\n\n---\n\nSlide 2\nTesto...':'Testo pronto per Instagram…'}
+                    style={{width:'100%',padding:'10px 12px',border:`1px solid ${PINK}`,borderRadius:8,fontSize:13,fontFamily:'DM Sans,sans-serif',outline:'none',resize:'vertical',minHeight:110,boxSizing:'border-box',background:CREAM,color:NAVY,lineHeight:1.6}}/>
+                </div>
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:9,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',color:NAVY,opacity:0.32,marginBottom:7}}>File (Canva / Drive)</div>
+                  <input value={pFileUrl} onChange={e=>setPFileUrl(e.target.value)} placeholder="https://canva.com/…"
+                    style={{width:'100%',padding:'8px 12px',border:`1px solid ${PINK}`,borderRadius:8,fontSize:13,fontFamily:'DM Sans,sans-serif',outline:'none',boxSizing:'border-box',background:CREAM,color:NAVY}}/>
+                  {pFileUrl&&<a href={pFileUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:'#888',display:'inline-block',marginTop:5}}>Apri file →</a>}
+                </div>
+                <div style={{display:'flex',gap:8,justifyContent:'flex-end',flexWrap:'wrap',paddingBottom:24}}>
+                  {selItem&&<button onClick={()=>{onDelete(selItem.id);setPanelOpen(false);}} style={{padding:'8px 14px',borderRadius:8,border:'1px solid #c92a2a',background:'#fff',color:'#c92a2a',cursor:'pointer',fontSize:12,fontFamily:'DM Sans,sans-serif'}}>🗑 Elimina</button>}
+                  <button onClick={()=>setPanelOpen(false)} style={{padding:'8px 16px',borderRadius:8,border:`1px solid ${NAVY}`,background:'#fff',color:NAVY,cursor:'pointer',fontSize:12,fontFamily:'DM Sans,sans-serif'}}>Annulla</button>
+                  <button onClick={savePanel} disabled={!pTitolo.trim()} style={{padding:'8px 20px',borderRadius:8,border:'none',background:NAVY,color:'#fff',cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'DM Sans,sans-serif',opacity:pTitolo.trim()?1:0.5}}>Salva</button>
+                </div>
+              </div>
+            </>
+          }
+        </div>
+      </div>;
+    }
+
+
+      const [viewDate,setViewDate]=useState(new Date());
+      const [calComment,setCalComment]=useState('');
+      const [panelOpen,setPanelOpen]=useState(false);
       const [selItem,setSelItem]=useState(null);
       const [selDate,setSelDate]=useState(null);
       const [pTitolo,setPTitolo]=useState('');
