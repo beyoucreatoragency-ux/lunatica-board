@@ -204,10 +204,11 @@
       </Modal>;
     }
 
-    function CalendarPage({section,calItems,currentUser,isMobile,onAdd,onEdit,onDelete,onToggleView}){
+    function CalendarPage({section,calItems,comments,currentUser,isMobile,onAdd,onEdit,onDelete,onToggleView,onAddComment,onDeleteComment}){
       const [viewDate,setViewDate]=useState(new Date());
       const [modalDate,setModalDate]=useState(null);
       const [editingItem,setEditingItem]=useState(null);
+      const [calComment,setCalComment]=useState('');
       const year=viewDate.getFullYear(), month=viewDate.getMonth();
       const firstDay=(new Date(year,month,1).getDay()||7)-1;
       const daysInMonth=new Date(year,month+1,0).getDate();
@@ -292,6 +293,48 @@
             setModalDate(null); setEditingItem(null);
           }}
         />}
+
+        <h2 style={{fontFamily:'DM Serif Display,serif',fontSize:isMobile?17:22,color:NAVY,margin:'2rem 0 14px'}}>Commenti</h2>
+        <div style={{background:'#fff',borderRadius:12,border:`1px solid ${PINK}`,overflow:'hidden',marginBottom:40}}>
+          <div style={{padding:isMobile?'12px 12px':'16px 20px',borderBottom:`1px solid ${PINK}`}}>
+            <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+              <Av uid={currentUser.id} size={32}/>
+              <div style={{flex:1}}>
+                <textarea value={calComment} onChange={e=>setCalComment(e.target.value)}
+                  onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(calComment.trim()){onAddComment(calComment);setCalComment('');}}}}
+                  placeholder="Scrivi un commento sul calendario…"
+                  style={{width:'100%',padding:'10px 12px',border:`1.5px solid ${PINK}`,borderRadius:10,fontSize:13,fontFamily:'DM Sans,sans-serif',outline:'none',resize:'none',minHeight:54,boxSizing:'border-box',background:CREAM,color:NAVY}}/>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8,flexWrap:'wrap',gap:6}}>
+                  <div style={{display:'flex',gap:4,flexWrap:'wrap',alignItems:'center'}}>
+                    <span style={{fontSize:11,color:'#ccc'}}>@:</span>
+                    {Object.values(USERS).map(u=><button key={u.id} onClick={()=>setCalComment(p=>p+'@'+u.name+' ')} style={{fontSize:11,padding:'3px 9px',background:CREAM,border:`1px solid ${PINK}`,borderRadius:20,cursor:'pointer',color:NAVY,fontFamily:'DM Sans,sans-serif'}}>@{u.name}</button>)}
+                  </div>
+                  <Btn onClick={()=>{if(calComment.trim()){onAddComment(calComment);setCalComment('');}}} disabled={!calComment.trim()} style={{padding:'7px 14px',fontSize:12}}>Invia</Btn>
+                </div>
+              </div>
+            </div>
+          </div>
+          {!comments||comments.length===0
+            ?<p style={{color:'#ccc',textAlign:'center',padding:'24px',margin:0,fontSize:13}}>Nessun commento ancora.</p>
+            :[...comments].reverse().map(c=>{
+                const author=USERS[c.authorId];
+                const renderC=text=>text.split(/(@\w+)/g).map((p,i)=>{const u=Object.values(USERS).find(u=>p==='@'+u.name);return u?<strong key={i} style={{color:NAVY,background:PINK,padding:'1px 5px',borderRadius:3}}>{p}</strong>:p;});
+                return <div key={c.id} style={{padding:isMobile?'12px 12px':'14px 20px',borderBottom:'1px solid #f8f9fa',display:'flex',gap:10}}>
+                  <Av uid={c.authorId} size={28}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
+                      <span style={{fontWeight:700,fontSize:13,color:NAVY}}>{author?.name}</span>
+                      <div style={{display:'flex',gap:8,alignItems:'center',flexShrink:0}}>
+                        <span style={{fontSize:10,color:'#ccc'}}>{fmtTime(c.createdAt)}</span>
+                        {c.authorId===currentUser.id&&<button onClick={()=>onDeleteComment(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:15,padding:0}}>×</button>}
+                      </div>
+                    </div>
+                    <p style={{margin:0,fontSize:13,color:'#444',lineHeight:1.5,wordBreak:'break-word'}}>{renderC(c.text)}</p>
+                  </div>
+                </div>;
+              })
+          }
+        </div>
       </div>;
     }
 
@@ -751,10 +794,13 @@
           {view==='items'
             ? activeSection?.viewType==='calendar'
               ? <CalendarPage section={activeSection} calItems={calendarItems[activeSectionId]||[]} currentUser={user} isMobile={isMobile}
+                  comments={comments[activeSectionId]||[]}
                   onAdd={item=>addCalItem(activeSectionId,item)}
                   onEdit={item=>editCalItem(activeSectionId,item)}
                   onDelete={id=>deleteCalItem(activeSectionId,id)}
                   onToggleView={()=>toggleSectionView(activeSectionId)}
+                  onAddComment={text=>addComment(activeSectionId,text)}
+                  onDeleteComment={commentId=>deleteComment(activeSectionId,commentId)}
                 />
               : <ItemsPage section={activeSection} items={sectionItems} tasks={tasks} isMobile={isMobile}
                   onAdd={d=>addItem(activeSectionId,d)}
