@@ -46,7 +46,7 @@
       ludovica: { id:'ludovica',  name:'Ludovica',  email:'marketing.ludovicapinna@gmail.com', initials:'LP', color:'#7E5A9B' },
       isa:      { id:'isa',       name:'Isa',        email:'isa_lp97@hotmail.it', initials:'IS', color:'#C4826A' },
       elisa:    { id:'elisa',     name:'Elisa',      email:'elisasinieri@gmail.com', initials:'ES', color:'#2D9E75' },
-      claudia:  { id:'claudia',   name:'Claudia',    email:'claudiav.viaggi@gmail.com', initials:'CL', color:'#B4526A' },
+      claudia:  { id:'claudia',   name:'Claudia',    email:'claudiav.viaggi@gmail.com', initials:'CL', color:'#B4526A', noTasks:true },
     };
     const CREDENTIALS={
       'francesca.concaro@gmail.com':       {id:'francesca',pass:'cfp2026/'},
@@ -163,9 +163,11 @@
       </Modal>;
     }
 
-    function CalendarPage({section,calItems,comments,currentUser,isMobile,onAdd,onEdit,onDelete,onToggleView,onAddComment,onDeleteComment}){
+    function CalendarPage({section,calItems,comments,docs,currentUser,isMobile,onAdd,onEdit,onDelete,onToggleView,onAddComment,onDeleteComment,onAddDoc,onDeleteDoc}){
       const [viewDate,setViewDate]=useState(new Date());
       const [calComment,setCalComment]=useState('');
+      const [newDocCat,setNewDocCat]=useState('');
+      const [newDocUrl,setNewDocUrl]=useState('');
       const [panelOpen,setPanelOpen]=useState(false);
       const [panelMode,setPanelMode]=useState('item'); // 'item' | 'stories'
       const [selItem,setSelItem]=useState(null);
@@ -312,6 +314,39 @@
                   </span>
                 </div>}
               </div>;})}
+          </div>
+        </div>
+
+        {/* Documents section */}
+        <h2 style={{fontFamily:'DM Serif Display,serif',fontSize:isMobile?17:20,color:NAVY,margin:'0 0 12px'}}>Documenti di riferimento</h2>
+        <div style={{background:'#fff',borderRadius:12,border:`1px solid ${PINK}`,overflow:'hidden',marginBottom:24}}>
+          {/* Table header */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 2fr auto',background:CREAM,borderBottom:`1px solid ${PINK}`,padding:'8px 16px',gap:12}}>
+            <div style={{fontSize:10,fontWeight:700,color:NAVY,opacity:0.4,letterSpacing:'0.1em',textTransform:'uppercase'}}>Categoria</div>
+            <div style={{fontSize:10,fontWeight:700,color:NAVY,opacity:0.4,letterSpacing:'0.1em',textTransform:'uppercase'}}>Link documento</div>
+            <div style={{width:24}}/>
+          </div>
+          {/* Existing docs */}
+          {(docs||[]).length===0&&<p style={{color:'#ccc',textAlign:'center',padding:'18px',margin:0,fontSize:13}}>Nessun documento ancora. Aggiungine uno qui sotto.</p>}
+          {(docs||[]).map(doc=><div key={doc.id} style={{display:'grid',gridTemplateColumns:'1fr 2fr auto',padding:'10px 16px',gap:12,borderBottom:`1px solid #f8f9fa`,alignItems:'center'}}>
+            <div style={{fontSize:13,fontWeight:600,color:NAVY}}>{doc.categoria}</div>
+            <a href={doc.url} target="_blank" rel="noreferrer"
+              style={{fontSize:13,color:'#4a6fa5',textDecoration:'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:5}}>
+              <span style={{flexShrink:0}}>📎</span>
+              <span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{doc.url}</span>
+            </a>
+            <button onClick={()=>onDeleteDoc(doc.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#ddd',fontSize:15,padding:0,width:24,textAlign:'center'}} onMouseOver={e=>e.target.style.color='#c92a2a'} onMouseOut={e=>e.target.style.color='#ddd'}>×</button>
+          </div>)}
+          {/* Add new row */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 2fr auto',padding:'10px 16px',gap:12,borderTop:(docs||[]).length>0?`1px solid ${PINK}`:'none',background:CREAM,alignItems:'center'}}>
+            <input value={newDocCat} onChange={e=>setNewDocCat(e.target.value)} placeholder="es. Format, Script Reel…"
+              style={{padding:'7px 10px',border:`1.5px solid ${PINK}`,borderRadius:7,fontSize:12,fontFamily:'DM Sans,sans-serif',outline:'none',background:'#fff',color:NAVY}}/>
+            <input value={newDocUrl} onChange={e=>setNewDocUrl(e.target.value)} placeholder="https://drive.google.com/…"
+              onKeyDown={e=>{if(e.key==='Enter'&&newDocCat.trim()&&newDocUrl.trim()){onAddDoc({id:uid(),categoria:newDocCat.trim(),url:newDocUrl.trim(),createdAt:new Date().toISOString()});setNewDocCat('');setNewDocUrl('');}}}
+              style={{padding:'7px 10px',border:`1.5px solid ${PINK}`,borderRadius:7,fontSize:12,fontFamily:'DM Sans,sans-serif',outline:'none',background:'#fff',color:NAVY}}/>
+            <button onClick={()=>{if(newDocCat.trim()&&newDocUrl.trim()){onAddDoc({id:uid(),categoria:newDocCat.trim(),url:newDocUrl.trim(),createdAt:new Date().toISOString()});setNewDocCat('');setNewDocUrl('');}}}
+              disabled={!newDocCat.trim()||!newDocUrl.trim()}
+              style={{width:28,height:28,borderRadius:7,background:newDocCat.trim()&&newDocUrl.trim()?NAVY:'#e0e0e0',border:'none',color:'#fff',cursor:newDocCat.trim()&&newDocUrl.trim()?'pointer':'default',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
           </div>
         </div>
 
@@ -697,6 +732,7 @@
       const [comments,setComments]=useState({});
       const [notifs,setNotifs]=useState({});
       const [calendarItems,setCalendarItems]=useState({});
+      const [calDocs,setCalDocs]=useState({});
       const [showNotifs,setShowNotifs]=useState(false);
       const [showAddSection,setShowAddSection]=useState(false);
       const [newSectionName,setNewSectionName]=useState('');
@@ -710,8 +746,8 @@
 
       async function loadAll(){
         setLoading(true);
-        const [s,it,t,c,n,ci]=await Promise.all([dbGet('luna:sections'),dbGet('luna:items'),dbGet('luna:tasks'),dbGet('luna:comments'),dbGet('luna:notifs'),dbGet('luna:calItems')]);
-        if(s&&s.length) setSections(s); if(it) setItems(it); if(t) setTasks(t); if(c) setComments(c); if(n) setNotifs(n); if(ci) setCalendarItems(ci);
+        const [s,it,t,c,n,ci,cd]=await Promise.all([dbGet('luna:sections'),dbGet('luna:items'),dbGet('luna:tasks'),dbGet('luna:comments'),dbGet('luna:notifs'),dbGet('luna:calItems'),dbGet('luna:calDocs')]);
+        if(s&&s.length) setSections(s); if(it) setItems(it); if(t) setTasks(t); if(c) setComments(c); if(n) setNotifs(n); if(ci) setCalendarItems(ci); if(cd) setCalDocs(cd);
         setLoading(false);
       }
 
@@ -719,6 +755,9 @@
       const saveItems   =async d=>{setItems(d);   await dbSet('luna:items',d);};
       const saveTasks   =async d=>{setTasks(d);   await dbSet('luna:tasks',d);};
       const saveCalendarItems=async d=>{setCalendarItems(d);await dbSet('luna:calItems',d);};
+      const saveCalDocs=async d=>{setCalDocs(d);await dbSet('luna:calDocs',d);};
+      const addCalDoc=async(secId,doc)=>saveCalDocs({...calDocs,[secId]:[...(calDocs[secId]||[]),doc]});
+      const deleteCalDoc=async(secId,id)=>saveCalDocs({...calDocs,[secId]:(calDocs[secId]||[]).filter(d=>d.id!==id)});
       const saveComments=async d=>{setComments(d);await dbSet('luna:comments',d);};
       const saveNotifs  =async d=>{setNotifs(d);  await dbSet('luna:notifs',d);};
 
@@ -904,6 +943,9 @@
             ? activeSection?.viewType==='calendar'
               ? <CalendarPage section={activeSection} calItems={calendarItems[activeSectionId]||[]} currentUser={user} isMobile={isMobile}
                   comments={comments[activeSectionId]||[]}
+                  docs={calDocs[activeSectionId]||[]}
+                  onAddDoc={doc=>addCalDoc(activeSectionId,doc)}
+                  onDeleteDoc={id=>deleteCalDoc(activeSectionId,id)}
                   onAdd={item=>addCalItem(activeSectionId,item)}
                   onEdit={item=>editCalItem(activeSectionId,item)}
                   onDelete={id=>deleteCalItem(activeSectionId,id)}
