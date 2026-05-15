@@ -179,6 +179,7 @@
       const [pCaption,setPCaption]=useState('');
       const [pStato,setPStato]=useState('da fare');
       const [pFileUrl,setPFileUrl]=useState('');
+      const [pScript,setPScript]=useState('');
       const [dragItem,setDragItem]=useState(null);
       const [dragOver,setDragOver]=useState(null);
 
@@ -204,19 +205,19 @@
       const storyDays=new Set(monthStories.map(s=>s.date)).size;
       const statsCounts={Post:monthFeed.filter(i=>i.tipologia==='Post').length,Carosello:monthFeed.filter(i=>i.tipologia==='Carosello').length,Reel:monthFeed.filter(i=>i.tipologia==='Reel').length};
 
-      const openItem=item=>{setSelItem(item);setSelDate(item.date);setPTitolo(item.titolo||'');setPTipologia(item.tipologia||'Post');setPDescrizione(item.descrizione||'');setPCaption(item.caption||'');setPStato(item.stato||'da fare');setPFileUrl(item.fileUrl||'');setPanelMode('item');setPanelOpen(true);};
-      const openNew=date=>{setSelItem(null);setSelDate(date);setPTitolo('');setPTipologia('Post');setPDescrizione('');setPCaption('');setPStato('da fare');setPFileUrl('');setPanelMode('item');setPanelOpen(true);};
+      const openItem=item=>{setSelItem(item);setSelDate(item.date);setPTitolo(item.titolo||'');setPTipologia(item.tipologia||'Post');setPDescrizione(item.descrizione||'');setPCaption(item.caption||'');setPScript(item.script||'');setPStato(item.stato||'da fare');setPFileUrl(item.fileUrl||'');setPanelMode('item');setPanelOpen(true);};
+      const openNew=date=>{setSelItem(null);setSelDate(date);setPTitolo('');setPTipologia('Post');setPDescrizione('');setPCaption('');setPScript('');setPStato('da fare');setPFileUrl('');setPanelMode('item');setPanelOpen(true);};
       const openStories=(date,stories)=>{setSelDate(date);setSelStories(stories);setPanelMode('stories');setPanelOpen(true);};
 
       const savePanel=()=>{
         if(!pTitolo.trim()) return;
-        const data={titolo:pTitolo,tipologia:pTipologia,descrizione:pDescrizione,caption:pCaption,stato:pStato,fileUrl:pFileUrl,date:selDate};
+        const data={titolo:pTitolo,tipologia:pTipologia,descrizione:pDescrizione,caption:pCaption,script:pScript,stato:pStato,fileUrl:pFileUrl,date:selDate};
         if(selItem) onEdit({...data,id:selItem.id,createdBy:selItem.createdBy,createdAt:selItem.createdAt,sectionId:selItem.sectionId});
         else onAdd({...data,id:uid(),createdBy:currentUser.id,createdAt:new Date().toISOString()});
         setPanelOpen(false);
       };
 
-      const editStoryFromPanel=item=>{setSelItem(item);setPTitolo(item.titolo||'');setPTipologia('Storia');setPDescrizione(item.descrizione||'');setPCaption(item.caption||'');setPStato(item.stato||'da fare');setPFileUrl(item.fileUrl||'');setPanelMode('item');};
+      const editStoryFromPanel=item=>{setSelItem(item);setPTitolo(item.titolo||'');setPTipologia('Storia');setPDescrizione(item.descrizione||'');setPCaption(item.caption||'');setPScript(item.script||'');setPStato(item.stato||'da fare');setPFileUrl(item.fileUrl||'');setPanelMode('item');};
 
       const TS={Post:{bg:PINK,color:'#7a3828'},Carosello:{bg:'#D8D0E7',color:'#3a2060'},Reel:{bg:'#A8C8E0',color:'#1a3a5e'},Storia:{bg:'#B8D4B0',color:'#2a5020'}};
       const SD={'da fare':'#bbb','in lavorazione':'#e67700',pubblicato:'#2f9e44'};
@@ -458,12 +459,17 @@
                 </div>
                 <hr style={{border:'none',borderTop:`1px solid ${PINK}`,margin:'0 0 14px'}}/>
                 <div style={{marginBottom:14}}>
-                  <div style={{fontSize:9,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',color:NAVY,opacity:0.32,marginBottom:7}}>
-                    {pTipologia==='Carosello'?'Script slide':pTipologia==='Storia'?'Script storia':'Caption / Copy'}
-                  </div>
+                  <div style={{fontSize:9,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',color:NAVY,opacity:0.32,marginBottom:7}}>Script</div>
+                  <textarea value={pScript} onChange={e=>setPScript(e.target.value)}
+                    placeholder={pTipologia==='Reel'?'Testo parlato, azioni, B-roll…':pTipologia==='Carosello'?'Slide 1 — Cover\nTesto...\n\n---\n\nSlide 2\nTesto...':'Script del contenuto…'}
+                    style={{width:'100%',padding:'10px 12px',border:`1px solid ${PINK}`,borderRadius:8,fontSize:13,fontFamily:'DM Sans,sans-serif',outline:'none',resize:'vertical',minHeight:100,boxSizing:'border-box',background:CREAM,color:NAVY,lineHeight:1.6}}/>
+                </div>
+                <hr style={{border:'none',borderTop:`1px solid ${PINK}`,margin:'0 0 14px'}}/>
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:9,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',color:NAVY,opacity:0.32,marginBottom:7}}>Caption</div>
                   <textarea value={pCaption} onChange={e=>setPCaption(e.target.value)}
-                    placeholder={pTipologia==='Carosello'?'Slide 1 — Cover\nTesto...\n\n---\n\nSlide 2\nTesto...':'Testo pronto per Instagram…'}
-                    style={{width:'100%',padding:'10px 12px',border:`1px solid ${PINK}`,borderRadius:8,fontSize:13,fontFamily:'DM Sans,sans-serif',outline:'none',resize:'vertical',minHeight:110,boxSizing:'border-box',background:CREAM,color:NAVY,lineHeight:1.6}}/>
+                    placeholder="Testo pronto per Instagram…"
+                    style={{width:'100%',padding:'10px 12px',border:`1px solid ${PINK}`,borderRadius:8,fontSize:13,fontFamily:'DM Sans,sans-serif',outline:'none',resize:'vertical',minHeight:100,boxSizing:'border-box',background:CREAM,color:NAVY,lineHeight:1.6}}/>
                 </div>
                 <div style={{marginBottom:20}}>
                   <div style={{fontSize:9,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',color:NAVY,opacity:0.32,marginBottom:7}}>File (Canva / Drive)</div>
@@ -922,13 +928,18 @@
               :userNotifs.map(n=>{
                   const allItems=Object.values(items).flat();
                   const targetItem=allItems.find(i=>i.id===n.itemId);
-                  return <div key={n.id} onClick={()=>{if(targetItem){navigateTo(targetItem.sectionId,targetItem);setShowNotifs(false);}}}
-                    style={{padding:'14px 18px',borderBottom:'1px solid #f8f9fa',cursor:targetItem?'pointer':'default',background:n.read?'transparent':'rgba(237,209,200,0.18)',display:'flex',gap:12,alignItems:'flex-start',minHeight:60}}>
+                  const targetSection=!targetItem?sections.find(s=>s.id===n.itemId):null;
+                  const isNavigable=!!(targetItem||targetSection);
+                  return <div key={n.id} onClick={()=>{
+                    if(targetItem){navigateTo(targetItem.sectionId,targetItem);setShowNotifs(false);}
+                    else if(targetSection){setActiveSectionId(n.itemId);setView('items');setActiveItem(null);setShowNotifs(false);}
+                  }}
+                    style={{padding:'14px 18px',borderBottom:'1px solid #f8f9fa',cursor:isNavigable?'pointer':'default',background:n.read?'transparent':'rgba(237,209,200,0.18)',display:'flex',gap:12,alignItems:'flex-start',minHeight:60}}>
                     <Av uid={n.fromUserId} size={30}/>
                     <div style={{flex:1,minWidth:0}}>
                       <p style={{margin:'0 0 3px',fontSize:13,color:NAVY,lineHeight:1.3}}><strong>{USERS[n.fromUserId]?.name}</strong> ti ha taggato</p>
                       <p style={{margin:'0 0 4px',fontSize:12,color:'#888',lineHeight:1.4,fontStyle:'italic',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>"{n.preview}"</p>
-                      <p style={{margin:0,fontSize:11,color:'#ccc'}}>{fmtTime(n.createdAt)}{targetItem?' · '+targetItem.name:''}</p>
+                      <p style={{margin:0,fontSize:11,color:'#ccc'}}>{fmtTime(n.createdAt)}{targetItem?' · '+targetItem.name:targetSection?' · '+targetSection.name:''}</p>
                     </div>
                     {!n.read&&<div style={{width:9,height:9,borderRadius:'50%',background:'#ff4757',flexShrink:0,marginTop:4}}/>}
                   </div>;
