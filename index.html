@@ -753,6 +753,16 @@
       useEffect(()=>{ if(user) loadAll(); },[user]);
       useEffect(()=>{ if(!isMobile) setSidebarOpen(false); },[isMobile]);
 
+      // Auto-refresh every 30s to stay in sync with other users
+      useEffect(()=>{
+        if(!user) return;
+        const interval=setInterval(async()=>{
+          const [s,it,t,c,n,ci,cd]=await Promise.all([dbGet('luna:sections'),dbGet('luna:items'),dbGet('luna:tasks'),dbGet('luna:comments'),dbGet('luna:notifs'),dbGet('luna:calItems'),dbGet('luna:calDocs')]);
+          if(s&&s.length) setSections(s); if(it) setItems(it); if(t) setTasks(t); if(c) setComments(c); if(n) setNotifs(n); if(ci) setCalendarItems(ci); if(cd) setCalDocs(cd);
+        },30000);
+        return ()=>clearInterval(interval);
+      },[user]);
+
       async function loadAll(){
         setLoading(true);
         const [s,it,t,c,n,ci,cd]=await Promise.all([dbGet('luna:sections'),dbGet('luna:items'),dbGet('luna:tasks'),dbGet('luna:comments'),dbGet('luna:notifs'),dbGet('luna:calItems'),dbGet('luna:calDocs')]);
@@ -792,18 +802,46 @@
       const addCalItem=async(secId,item)=>{await saveCalendarItems({...calendarItems,[secId]:[...(calendarItems[secId]||[]),item]});showToast('Contenuto salvato ✓');};
       const editCalItem=async(secId,updated)=>{await saveCalendarItems({...calendarItems,[secId]:(calendarItems[secId]||[]).map(i=>i.id===updated.id?updated:i)});showToast('Contenuto salvato ✓');};
       const deleteCalItem=async(secId,id)=>saveCalendarItems({...calendarItems,[secId]:(calendarItems[secId]||[]).filter(i=>i.id!==id)});
-      const addItem=async(secId,d)=>{await saveItems({...items,[secId]:[...(items[secId]||[]),{id:uid(),sectionId:secId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'pianificato'}]});showToast('Elemento salvato ✓');};
+      const addItem=async(secId,d)=>{
+        const fresh=await dbGet('luna:items');
+        const current=fresh||items;
+        const updated={...current,[secId]:[...(current[secId]||[]),{id:uid(),sectionId:secId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'pianificato'}]};
+        setItems(updated);await dbSet('luna:items',updated);
+        showToast('Elemento salvato ✓');
+      };
       const deleteItem=async(secId,id)=>{await saveItems({...items,[secId]:(items[secId]||[]).filter(i=>i.id!==id)});const nt={...tasks};delete nt[id];await saveTasks(nt);const nc={...comments};delete nc[id];await saveComments(nc);};
       const updateItemStatus=async(secId,id,s)=>saveItems({...items,[secId]:(items[secId]||[]).map(i=>i.id===id?{...i,status:s}:i)});
-      const editItem=async(secId,updated)=>{await saveItems({...items,[secId]:(items[secId]||[]).map(i=>i.id===updated.id?updated:i)});showToast('Elemento salvato ✓');};
-      const addTask=async(itemId,d)=>{await saveTasks({...tasks,[itemId]:[...(tasks[itemId]||[]),{id:uid(),itemId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'todo'}]});showToast('Task salvata ✓');};
+      const editItem=async(secId,updated)=>{
+        const fresh=await dbGet('luna:items');
+        const current=fresh||items;
+        const newState={...current,[secId]:(current[secId]||[]).map(i=>i.id===updated.id?updated:i)};
+        setItems(newState);await dbSet('luna:items',newState);
+        showToast('Elemento salvato ✓');
+      };
+      const addTask=async(itemId,d)=>{
+        const fresh=await dbGet('luna:tasks');
+        const current=fresh||tasks;
+        const updated={...current,[itemId]:[...(current[itemId]||[]),{id:uid(),itemId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'todo'}]};
+        setTasks(updated);await dbSet('luna:tasks',updated);
+        showToast('Task salvata ✓');
+      };
       const updateTaskStatus=async(itemId,taskId,s)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).map(t=>t.id===taskId?{...t,status:s}:t)});
       const deleteTask=async(itemId,taskId)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).filter(t=>t.id!==taskId)});
-      const editTask=async(itemId,updated)=>{await saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).map(t=>t.id===updated.id?updated:t)});showToast('Task salvata ✓');};
+      const editTask=async(itemId,updated)=>{
+        const fresh=await dbGet('luna:tasks');
+        const current=fresh||tasks;
+        const newState={...current,[itemId]:(current[itemId]||[]).map(t=>t.id===updated.id?updated:t)};
+        setTasks(newState);await dbSet('luna:tasks',newState);
+        showToast('Task salvata ✓');
+      };
       const addComment=async(itemId,text)=>{
         const mentions=Object.values(USERS).filter(u=>text.includes('@'+u.name)).map(u=>u.id);
         const nc={id:uid(),itemId,text,authorId:user.id,createdAt:new Date().toISOString(),mentions};
-        await saveComments({...comments,[itemId]:[...(comments[itemId]||[]),nc]});
+        const fresh=await dbGet('luna:comments');
+        const current=fresh||comments;
+        const updated={...current,[itemId]:[...(current[itemId]||[]),nc]};
+        setComments(updated);
+        await dbSet('luna:comments',updated);
         showToast('Commento inviato ✓');
         if(mentions.length){
           const nn={...notifs};
