@@ -163,7 +163,7 @@
       </Modal>;
     }
 
-    function CalendarPage({section,calItems,comments,docs,currentUser,isMobile,onAdd,onEdit,onDelete,onToggleView,onAddComment,onDeleteComment,onAddDoc,onDeleteDoc}){
+    function CalendarPage({section,calItems,comments,docs,currentUser,isMobile,onAdd,onEdit,onDelete,onToggleView,onAddComment,onDeleteComment,onAddDoc,onDeleteDoc,showToast}){
       const [viewDate,setViewDate]=useState(new Date());
       const [calComment,setCalComment]=useState('');
       const [newDocCat,setNewDocCat]=useState('');
@@ -215,6 +215,7 @@
         if(selItem) onEdit({...data,id:selItem.id,createdBy:selItem.createdBy,createdAt:selItem.createdAt,sectionId:selItem.sectionId});
         else onAdd({...data,id:uid(),createdBy:currentUser.id,createdAt:new Date().toISOString()});
         setPanelOpen(false);
+        if(showToast) showToast('Contenuto salvato ✓');
       };
 
       const editStoryFromPanel=item=>{setSelItem(item);setPTitolo(item.titolo||'');setPTipologia('Storia');setPDescrizione(item.descrizione||'');setPCaption(item.caption||'');setPScript(item.script||'');setPStato(item.stato||'da fare');setPFileUrl(item.fileUrl||'');setPanelMode('item');};
@@ -739,6 +740,8 @@
       const [notifs,setNotifs]=useState({});
       const [calendarItems,setCalendarItems]=useState({});
       const [calDocs,setCalDocs]=useState({});
+      const [toast,setToast]=useState(null);
+      const showToast=(msg,ok=true)=>{setToast({msg,ok});setTimeout(()=>setToast(null),2800);};
       const [showNotifs,setShowNotifs]=useState(false);
       const [showAddSection,setShowAddSection]=useState(false);
       const [newSectionName,setNewSectionName]=useState('');
@@ -762,7 +765,7 @@
       const saveTasks   =async d=>{setTasks(d);   await dbSet('luna:tasks',d);};
       const saveCalendarItems=async d=>{setCalendarItems(d);await dbSet('luna:calItems',d);};
       const saveCalDocs=async d=>{setCalDocs(d);await dbSet('luna:calDocs',d);};
-      const addCalDoc=async(secId,doc)=>saveCalDocs({...calDocs,[secId]:[...(calDocs[secId]||[]),doc]});
+      const addCalDoc=async(secId,doc)=>{await saveCalDocs({...calDocs,[secId]:[...(calDocs[secId]||[]),doc]});showToast('Documento aggiunto ✓');};
       const deleteCalDoc=async(secId,id)=>saveCalDocs({...calDocs,[secId]:(calDocs[secId]||[]).filter(d=>d.id!==id)});
       const saveComments=async d=>{setComments(d);await dbSet('luna:comments',d);};
       const saveNotifs  =async d=>{setNotifs(d);  await dbSet('luna:notifs',d);};
@@ -786,25 +789,22 @@
         setRenamingSection(null); setRenameValue('');
       };
       const toggleSectionView=async id=>saveSections(sections.map(s=>s.id===id?{...s,viewType:s.viewType==='calendar'?'board':'calendar'}:s));
-      const addCalItem=async(secId,item)=>saveCalendarItems({...calendarItems,[secId]:[...(calendarItems[secId]||[]),item]});
-      const editCalItem=async(secId,updated)=>saveCalendarItems({...calendarItems,[secId]:(calendarItems[secId]||[]).map(i=>i.id===updated.id?updated:i)});
+      const addCalItem=async(secId,item)=>{await saveCalendarItems({...calendarItems,[secId]:[...(calendarItems[secId]||[]),item]});showToast('Contenuto salvato ✓');};
+      const editCalItem=async(secId,updated)=>{await saveCalendarItems({...calendarItems,[secId]:(calendarItems[secId]||[]).map(i=>i.id===updated.id?updated:i)});showToast('Contenuto salvato ✓');};
       const deleteCalItem=async(secId,id)=>saveCalendarItems({...calendarItems,[secId]:(calendarItems[secId]||[]).filter(i=>i.id!==id)});
-      const addItem=async(secId,d)=>saveItems({...items,[secId]:[...(items[secId]||[]),{id:uid(),sectionId:secId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'pianificato'}]});
-      const deleteItem=async(secId,id)=>{
-        await saveItems({...items,[secId]:(items[secId]||[]).filter(i=>i.id!==id)});
-        const nt={...tasks}; delete nt[id]; await saveTasks(nt);
-        const nc={...comments}; delete nc[id]; await saveComments(nc);
-      };
+      const addItem=async(secId,d)=>{await saveItems({...items,[secId]:[...(items[secId]||[]),{id:uid(),sectionId:secId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'pianificato'}]});showToast('Elemento salvato ✓');};
+      const deleteItem=async(secId,id)=>{await saveItems({...items,[secId]:(items[secId]||[]).filter(i=>i.id!==id)});const nt={...tasks};delete nt[id];await saveTasks(nt);const nc={...comments};delete nc[id];await saveComments(nc);};
       const updateItemStatus=async(secId,id,s)=>saveItems({...items,[secId]:(items[secId]||[]).map(i=>i.id===id?{...i,status:s}:i)});
-      const editItem=async(secId,updated)=>saveItems({...items,[secId]:(items[secId]||[]).map(i=>i.id===updated.id?updated:i)});
-      const addTask=async(itemId,d)=>saveTasks({...tasks,[itemId]:[...(tasks[itemId]||[]),{id:uid(),itemId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'todo'}]});
+      const editItem=async(secId,updated)=>{await saveItems({...items,[secId]:(items[secId]||[]).map(i=>i.id===updated.id?updated:i)});showToast('Elemento salvato ✓');};
+      const addTask=async(itemId,d)=>{await saveTasks({...tasks,[itemId]:[...(tasks[itemId]||[]),{id:uid(),itemId,...d,createdBy:user.id,createdAt:new Date().toISOString(),status:'todo'}]});showToast('Task salvata ✓');};
       const updateTaskStatus=async(itemId,taskId,s)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).map(t=>t.id===taskId?{...t,status:s}:t)});
       const deleteTask=async(itemId,taskId)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).filter(t=>t.id!==taskId)});
-      const editTask=async(itemId,updated)=>saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).map(t=>t.id===updated.id?updated:t)});
+      const editTask=async(itemId,updated)=>{await saveTasks({...tasks,[itemId]:(tasks[itemId]||[]).map(t=>t.id===updated.id?updated:t)});showToast('Task salvata ✓');};
       const addComment=async(itemId,text)=>{
         const mentions=Object.values(USERS).filter(u=>text.includes('@'+u.name)).map(u=>u.id);
         const nc={id:uid(),itemId,text,authorId:user.id,createdAt:new Date().toISOString(),mentions};
         await saveComments({...comments,[itemId]:[...(comments[itemId]||[]),nc]});
+        showToast('Commento inviato ✓');
         if(mentions.length){
           const nn={...notifs};
           const preview=text.length>70?text.slice(0,70)+'…':text;
@@ -957,6 +957,7 @@
                   docs={calDocs[activeSectionId]||[]}
                   onAddDoc={doc=>addCalDoc(activeSectionId,doc)}
                   onDeleteDoc={id=>deleteCalDoc(activeSectionId,id)}
+                  showToast={showToast}
                   onAdd={item=>addCalItem(activeSectionId,item)}
                   onEdit={item=>editCalItem(activeSectionId,item)}
                   onDelete={id=>deleteCalItem(activeSectionId,id)}
@@ -990,6 +991,12 @@
               />
           }
         </main>
+
+        {/* TOAST NOTIFICATION */}
+        {toast&&<div style={{position:'fixed',bottom:24,right:24,background:toast.ok?NAVY:'#c92a2a',color:'#fff',padding:'11px 20px',borderRadius:10,fontSize:13,fontWeight:600,zIndex:9999,display:'flex',alignItems:'center',gap:10,boxShadow:'0 4px 20px rgba(6,21,63,0.25)',fontFamily:'DM Sans,sans-serif',animation:'none'}}>
+          <span style={{fontSize:16,color:toast.ok?'#74c0fc':'#ffa8a8'}}>✓</span>
+          {toast.msg}
+        </div>}
       </div>;
     }
 
